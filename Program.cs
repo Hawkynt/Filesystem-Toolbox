@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Filesystem_Toolbox {
@@ -13,7 +10,15 @@ namespace Filesystem_Toolbox {
     static void Main() {
       Application.EnableVisualStyles();
       Application.SetCompatibleTextRenderingDefault(false);
-      Application.Run(new MainForm());
+
+      using (var logic = new MainLogic()) {
+        logic.LoadConfiguration();
+
+        using (var mainForm = new MainForm())
+          Application.Run(mainForm);
+
+        logic.SaveConfiguration();
+      }
     }
   }
 }

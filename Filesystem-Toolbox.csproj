@@ -22,6 +22,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -31,6 +32,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -46,12 +48,29 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\..\Framework\System.Collections.Generic.EnumerableExtensions.cs">
+      <Link>Framework\System.Collections.Generic.EnumerableExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Framework\System.IO.DirectoryInfoExtensions.cs">
+      <Link>Framework\System.IO.DirectoryInfoExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Framework\System.IO.FileInfoExtensions.cs">
+      <Link>Framework\System.IO.FileInfoExtensions.cs</Link>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>System.IO.FileInfoExtensions.tt</DependentUpon>
+    </Compile>
+    <Compile Include="..\..\Framework\System.StringExtensions.cs">
+      <Link>Framework\System.StringExtensions.cs</Link>
+    </Compile>
+    <Compile Include="Classes\FolderIntegrityChecker.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="MainLogic.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
@@ -82,6 +101,16 @@
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\Framework\System.IO.FileInfoExtensions.tt">
+      <Link>Framework\System.IO.FileInfoExtensions.tt</Link>
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>System.IO.FileInfoExtensions.cs</LastGenOutput>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
@@ -90,4 +119,5 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <Import Project="..\..\VersionSpecificSymbols.Common.prop" />
 </Project>

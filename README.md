@@ -9,8 +9,9 @@ TODO:
       * class implementing IDictionary<string,string>
       * single file for all hashes
       * starting at eof is size of kvp to skip backwards to next kvp
-      * add/update key stored at end of file
-      * deleting keys stored as marker in first and last key appearance
+      * add key stored at end of file
+      * update key stored at end of file, mark previous key as deleted
+      * deleted keys stored as marker
       * periodically optimize file, removing all updated keys
       * in-memory cache class implementing IDictionary<string,string>
     * install FSW to update checksums whenever files get modified/created/deleted
