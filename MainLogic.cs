@@ -28,6 +28,22 @@ namespace Filesystem_Toolbox {
       this.MergeConfiguration();
     }
 
+    public void RunChecks(Action<FileInfo, string, string> onChecksumFailed, Action<FileInfo, string, Exception> onException) {
+      var alreadyRun = new HashSet<FolderIntegrityChecker>();
+      while (true) {
+        FolderIntegrityChecker currentChecker;
+        lock (this._integrityCheckers)
+          currentChecker = this._integrityCheckers.FirstOrDefault(i => !alreadyRun.Contains(i));
+
+        if (currentChecker == null)
+          return;
+
+        alreadyRun.Add(currentChecker);
+
+        currentChecker.VerifyIntegrity(onChecksumFailed, onException);
+      }
+    }
+
     public void MergeConfiguration() {
       var lines = _IntegrityConfigurationFile.ReadAllLinesOrDefault();
       if (lines.IsNullOrEmpty())

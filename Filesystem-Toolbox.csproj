@@ -34,6 +34,9 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -51,6 +54,12 @@
     <Compile Include="..\..\Framework\System.Collections.Generic.EnumerableExtensions.cs">
       <Link>Framework\System.Collections.Generic.EnumerableExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\..\Framework\System.ComponentModel.SortableBindingList.cs">
+      <Link>Framework\System.ComponentModel.SortableBindingList.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Framework\System.ComponentModel.SortComparer.cs">
+      <Link>Framework\System.ComponentModel.SortComparer.cs</Link>
+    </Compile>
     <Compile Include="..\..\Framework\System.IO.DirectoryInfoExtensions.cs">
       <Link>Framework\System.IO.DirectoryInfoExtensions.cs</Link>
     </Compile>
@@ -66,6 +75,9 @@
     <Compile Include="..\..\Framework\System.Threading.Tasks.ScheduledTask.cs">
       <Link>Framework\System.Threading.Tasks.ScheduledTask.cs</Link>
     </Compile>
+    <Compile Include="..\..\Framework\System.Windows.Forms.ControlExtensions.cs">
+      <Link>Framework\System.Windows.Forms.ControlExtensions.cs</Link>
+    </Compile>
     <Compile Include="Classes\FolderIntegrityChecker.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
@@ -76,6 +88,9 @@
     <Compile Include="MainLogic.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="MainForm.resx">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -84,7 +99,11 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
+    <None Include="CheckedFolders.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="LICENSE">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -110,6 +129,10 @@
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>System.IO.FileInfoExtensions.cs</LastGenOutput>
     </Content>
+    <Content Include="app.ico" />
+    <None Include="Resources\24x24 Information.png" />
+    <None Include="Resources\16x16 Warning.png" />
+    <None Include="Resources\16x16 Error.png" />
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />

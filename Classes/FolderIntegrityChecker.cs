@@ -5,6 +5,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
+// TODO: internal queue for processing files
+// TODO: requeue file on file access exception
+
 namespace Classes {
 
   class FolderIntegrityChecker : IDisposable {
@@ -129,25 +132,37 @@ namespace Classes {
 
     public void SaveDatabase() {
       var file = this._databaseFile;
-      lock (file)
+      lock (file) {
         file.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} = {kvp.Key}"));
+        file.Attributes |= FileAttributes.System;
+        file.TryEnableCompression();
+      }
     }
 
     public void LoadDatabase() {
       this._database.Clear();
       var file = this._databaseFile;
-      lock (file)
+      lock (file) {
+        file.Refresh();
+        if (!file.Exists)
+          return;
+
         foreach (var line in file.ReadLines()) {
-          if (line.IsNullOrWhiteSpace()) continue;
+          if (line.IsNullOrWhiteSpace())
+            continue;
+
           var index = line.IndexOf("=", StringComparison.Ordinal);
-          if (index < 0) continue;
+          if (index < 0)
+            continue;
+
           var value = line.Left(index).TrimEnd();
           var key = line.Substring(index).TrimStart();
           this._database.TryAdd(key, value);
         }
+      }
     }
 
-    public void VerifyIntegrity(Action<FileInfo, string, string> onInvalidChecksum, Action<FileInfo, Exception> onException = null) {
+    public void VerifyIntegrity(Action<FileInfo, string, string> onInvalidChecksum, Action<FileInfo, string, Exception> onException = null) {
       if (onInvalidChecksum == null) throw new ArgumentNullException(nameof(onInvalidChecksum));
 
       foreach (var entry in this._database) {
@@ -156,8 +171,8 @@ namespace Classes {
         string current;
         try {
           current = _CalculateChecksum(file);
-        } catch (Exception e) {
-          onException?.Invoke(file, e);
+        } catch (Exception exception) {
+          onException?.Invoke(file, expected, exception);
           continue;
         }
         if (current == expected)
