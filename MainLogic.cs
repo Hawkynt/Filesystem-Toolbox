@@ -44,6 +44,8 @@ namespace Filesystem_Toolbox {
         var checker = FolderIntegrityChecker.Create(rootDirectory);
         lock (this._integrityCheckers)
           this._integrityCheckers.Add(checker);
+
+        checker.Enabled = true;
       }
     }
 

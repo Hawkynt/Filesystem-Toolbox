@@ -100,11 +100,15 @@ namespace Classes {
 
     private void _AddOrUpdateKey(string key, string value) {
       this._database.AddOrUpdate(key, _ => value, (_, __) => value);
+
+      this._TriggerDatabaseSave();
     }
 
     private void _RemoveKey(string key) {
       string _;
       this._database.TryRemove(key, out _);
+
+      this._TriggerDatabaseSave();
     }
 
     private void _ChangeKeyName(string oldKey, string newKey, Func<string> valueFactory) {
@@ -117,42 +121,49 @@ namespace Classes {
           ? oldChecksum
           : valueFactory()
       );
+
+      this._TriggerDatabaseSave();
     }
 
     private void _TriggerDatabaseSave() => this._scheduledTask.Schedule();
 
-    public void SaveDatabase()
-      => this._databaseFile.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} = {kvp.Key}"))
-      ;
+    public void SaveDatabase() {
+      var file = this._databaseFile;
+      lock (file)
+        file.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} = {kvp.Key}"));
+    }
 
     public void LoadDatabase() {
       this._database.Clear();
-      foreach (var line in this._databaseFile.ReadLines()) {
-        if (line.IsNullOrWhiteSpace()) continue;
-        var index = line.IndexOf("=", StringComparison.Ordinal);
-        if (index < 0) continue;
-        var value = line.Left(index).TrimEnd();
-        var key = line.Substring(index).TrimStart();
-        this._database.TryAdd(key, value);
-      }
+      var file = this._databaseFile;
+      lock (file)
+        foreach (var line in file.ReadLines()) {
+          if (line.IsNullOrWhiteSpace()) continue;
+          var index = line.IndexOf("=", StringComparison.Ordinal);
+          if (index < 0) continue;
+          var value = line.Left(index).TrimEnd();
+          var key = line.Substring(index).TrimStart();
+          this._database.TryAdd(key, value);
+        }
     }
 
-    public void VerifyIntegrity() {
+    public void VerifyIntegrity(Action<FileInfo, string, string> onInvalidChecksum, Action<FileInfo, Exception> onException = null) {
+      if (onInvalidChecksum == null) throw new ArgumentNullException(nameof(onInvalidChecksum));
+
       foreach (var entry in this._database) {
-        var fileName = entry.Key;
+        var file = new FileInfo(entry.Key);
         var expected = entry.Value;
         string current;
         try {
-          current = _CalculateChecksum(new FileInfo(fileName));
+          current = _CalculateChecksum(file);
         } catch (Exception e) {
-
-          // TODO: notify application about exception
+          onException?.Invoke(file, e);
           continue;
         }
         if (current == expected)
           continue;
 
-        // TODO: notify applciation about check failure
+        onInvalidChecksum(file, expected, current);
       }
     }
 
