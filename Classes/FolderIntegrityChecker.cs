@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Classes {
 
@@ -12,6 +14,7 @@ namespace Classes {
     private readonly FileSystemWatcher _fileSystemWatcher;
     private readonly ConcurrentDictionary<string, string> _database = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private readonly FileInfo _databaseFile;
+    private readonly ScheduledTask _scheduledTask;
     public DirectoryInfo RootDirectory { get; }
 
     public bool Enabled {
@@ -22,12 +25,16 @@ namespace Classes {
     public FolderIntegrityChecker(DirectoryInfo rootDirectory) {
       this.RootDirectory = rootDirectory;
       this._databaseFile = rootDirectory.File(_DATABASE_FILENAME);
+
       var watcher = this._fileSystemWatcher = new FileSystemWatcher(rootDirectory.FullName);
       watcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size;
       watcher.Changed += this._FileSystemWatcher_OnChanged;
       watcher.Created += this._FileSystemWatcher_OnCreated;
       watcher.Deleted += this._FileSystemWatcher_OnDeleted;
       watcher.Renamed += this._FileSystemWatcher_OnRenamed;
+
+      this._scheduledTask = new ScheduledTask(this._Scheduler_OnExecute, deferredTime: TimeSpan.FromMinutes(5));
+
     }
 
     #region IDisposable
@@ -41,6 +48,7 @@ namespace Classes {
 
       this.Enabled = false;
       this._fileSystemWatcher.Dispose();
+      this.SaveDatabase();
     }
 
     public void Dispose() {
@@ -56,6 +64,7 @@ namespace Classes {
 
     #region event handlers
 
+    private void _Scheduler_OnExecute() => this.SaveDatabase();
 
     private void _FileSystemWatcher_OnRenamed(object _, RenamedEventArgs e) {
       if (this._IsIgnoredFile(e.FullPath) || this._IsIgnoredFile(e.OldFullPath))
@@ -110,24 +119,49 @@ namespace Classes {
       );
     }
 
-    private void _TriggerDatabaseSave() {
-      //TODO: only save every n seconds
-      this._SaveDatabase();
+    private void _TriggerDatabaseSave() => this._scheduledTask.Schedule();
+
+    public void SaveDatabase()
+      => this._databaseFile.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} = {kvp.Key}"))
+      ;
+
+    public void LoadDatabase() {
+      this._database.Clear();
+      foreach (var line in this._databaseFile.ReadLines()) {
+        if (line.IsNullOrWhiteSpace()) continue;
+        var index = line.IndexOf("=", StringComparison.Ordinal);
+        if (index < 0) continue;
+        var value = line.Left(index).TrimEnd();
+        var key = line.Substring(index).TrimStart();
+        this._database.TryAdd(key, value);
+      }
     }
 
-    private void _SaveDatabase() {
-      // TODO: saveto file
+    public void VerifyIntegrity() {
+      foreach (var entry in this._database) {
+        var fileName = entry.Key;
+        var expected = entry.Value;
+        string current;
+        try {
+          current = _CalculateChecksum(new FileInfo(fileName));
+        } catch (Exception e) {
+
+          // TODO: notify application about exception
+          continue;
+        }
+        if (current == expected)
+          continue;
+
+        // TODO: notify applciation about check failure
+      }
     }
 
-    private void _LoadDatabase() {
-      // TODO: loadfrom file
+    public static FolderIntegrityChecker Create(DirectoryInfo rootDirectory) {
+      var result = new FolderIntegrityChecker(rootDirectory);
+      result.LoadDatabase();
+      return result;
     }
 
-    private void _VerifyIntegrity() {
-      // TODO: verify all files in db against their checksum
-    }
-
-    public static FolderIntegrityChecker Create(DirectoryInfo rootDirectory) => new FolderIntegrityChecker(rootDirectory);
     private static string _CalculateChecksum(FileInfo file) => file.Length + ":" + Convert.ToBase64String(file.ComputeSHA512Hash());
   }
 }

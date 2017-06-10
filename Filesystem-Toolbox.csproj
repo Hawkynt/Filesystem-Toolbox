@@ -63,6 +63,9 @@
     <Compile Include="..\..\Framework\System.StringExtensions.cs">
       <Link>Framework\System.StringExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\..\Framework\System.Threading.Tasks.ScheduledTask.cs">
+      <Link>Framework\System.Threading.Tasks.ScheduledTask.cs</Link>
+    </Compile>
     <Compile Include="Classes\FolderIntegrityChecker.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
