@@ -14,6 +14,8 @@ namespace Filesystem_Toolbox {
       private readonly FileInfo _file;
       private readonly Exception _exception;
 
+      [Browsable(false)]
+      public FileInfo File => this._file;
       public Image Image { get; }
       public string FileName => this._file.Name;
       public string Extension => this._file.Extension;
@@ -54,15 +56,28 @@ namespace Filesystem_Toolbox {
 
     internal MainForm() {
       this.InitializeComponent();
+      this.SetFormTitle();
+
       this.dgvProblems.DataSource = this._entries;
     }
 
     internal void MarkFileChecksumFailed(FileInfo file, string oldChecksum, string newChecksum)
-      => this.SafelyInvoke(() => this._entries.Add(DgvEntry.FromFailedChecksum(file, oldChecksum, newChecksum)))
+      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromFailedChecksum(file, oldChecksum, newChecksum)))
       ;
 
     internal void MarkFileException(FileInfo file, string oldChecksum, Exception exception)
-      => this.SafelyInvoke(() => this._entries.Add(DgvEntry.FromException(file, oldChecksum, exception)))
+      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromException(file, oldChecksum, exception)))
       ;
+
+    private void _AddEntry(DgvEntry entry) {
+      if (entry == null) throw new ArgumentNullException(nameof(entry));
+
+      var entries = this._entries;
+      for (var i = entries.Count - 1; i >= 0; --i)
+        if (entries[i].File.FullName == entry.File.FullName)
+          entries.RemoveAt(i);
+
+      entries.Add(entry);
+    }
   }
 }

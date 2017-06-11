@@ -78,7 +78,11 @@
     <Compile Include="..\..\Framework\System.Windows.Forms.ControlExtensions.cs">
       <Link>Framework\System.Windows.Forms.ControlExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\..\Libraries\ApplicationTitler.cs">
+      <Link>Libraries\ApplicationTitler.cs</Link>
+    </Compile>
     <Compile Include="Classes\FolderIntegrityChecker.cs" />
+    <Compile Include="Classes\TaskQueue.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>

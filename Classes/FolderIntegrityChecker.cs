@@ -5,12 +5,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-// TODO: internal queue for processing files
-// TODO: requeue file on file access exception
-
 namespace Classes {
 
-  class FolderIntegrityChecker : IDisposable {
+  public class FolderIntegrityChecker : IDisposable {
 
     private const string _DATABASE_FILENAME = @".\checksum.db";
 
@@ -18,6 +15,7 @@ namespace Classes {
     private readonly ConcurrentDictionary<string, string> _database = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private readonly FileInfo _databaseFile;
     private readonly ScheduledTask _scheduledTask;
+    private readonly TaskQueue _taskQueue = new TaskQueue { RequeueOnException = true };
     public DirectoryInfo RootDirectory { get; }
 
     public bool Enabled {
@@ -35,6 +33,7 @@ namespace Classes {
       watcher.Created += this._FileSystemWatcher_OnCreated;
       watcher.Deleted += this._FileSystemWatcher_OnDeleted;
       watcher.Renamed += this._FileSystemWatcher_OnRenamed;
+      watcher.InternalBufferSize = 65536;
 
       this._scheduledTask = new ScheduledTask(this._Scheduler_OnExecute, deferredTime: TimeSpan.FromMinutes(5));
 
@@ -51,6 +50,7 @@ namespace Classes {
 
       this.Enabled = false;
       this._fileSystemWatcher.Dispose();
+      this._taskQueue.Dispose();
       this.SaveDatabase();
     }
 
@@ -73,33 +73,45 @@ namespace Classes {
       if (this._IsIgnoredFile(e.FullPath) || this._IsIgnoredFile(e.OldFullPath))
         return;
 
-      this._ChangeKeyName(e.OldFullPath, e.FullPath, () => _CalculateChecksum(new FileInfo(e.FullPath)));
+      this._EnqueueTask(
+        () => this._ChangeKeyName(e.OldFullPath, e.FullPath, () => _CalculateChecksum(new FileInfo(e.FullPath))),
+        e.OldFullPath,
+        e.FullPath
+      );
     }
 
     private void _FileSystemWatcher_OnDeleted(object _, FileSystemEventArgs e) {
       if (this._IsIgnoredFile(e.FullPath))
         return;
 
-      this._RemoveKey(e.FullPath);
+      this._EnqueueTask(() => this._RemoveKey(e.FullPath), e.FullPath);
     }
 
     private void _FileSystemWatcher_OnCreated(object _, FileSystemEventArgs e) {
       if (this._IsIgnoredFile(e.FullPath))
         return;
 
-      this._AddOrUpdateKey(e.FullPath, _CalculateChecksum(new FileInfo(e.FullPath)));
+      this._EnqueueTask(() => this._AddOrUpdateKey(e.FullPath, _CalculateChecksum(new FileInfo(e.FullPath))), e.FullPath);
     }
 
     private void _FileSystemWatcher_OnChanged(object _, FileSystemEventArgs e) {
       if (this._IsIgnoredFile(e.FullPath))
         return;
 
-      this._AddOrUpdateKey(e.FullPath, _CalculateChecksum(new FileInfo(e.FullPath)));
+      this._EnqueueTask(() => this._AddOrUpdateKey(e.FullPath, _CalculateChecksum(new FileInfo(e.FullPath))), e.FullPath);
     }
 
     #endregion
 
     private bool _IsIgnoredFile(string fileName) => fileName == this._databaseFile.FullName;
+
+    private void _EnqueueTask(Action task, string key, string alternateKey = null) {
+      this._taskQueue.DequeueByTag(key);
+      if (alternateKey != null)
+        this._taskQueue.DequeueByTag(alternateKey);
+
+      this._taskQueue.Enqueue(task, key);
+    }
 
     private void _AddOrUpdateKey(string key, string value) {
       this._database.AddOrUpdate(key, _ => value, (_, __) => value);
@@ -133,9 +145,14 @@ namespace Classes {
     public void SaveDatabase() {
       var file = this._databaseFile;
       lock (file) {
-        file.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} = {kvp.Key}"));
-        file.Attributes |= FileAttributes.System;
+        file.Refresh();
+        if (file.Exists)
+          file.Attributes &= ~FileAttributes.System;
+
+        file.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} => {kvp.Key}"));
         file.TryEnableCompression();
+        file.Attributes |= FileAttributes.System;
+
       }
     }
 
@@ -151,12 +168,12 @@ namespace Classes {
           if (line.IsNullOrWhiteSpace())
             continue;
 
-          var index = line.IndexOf("=", StringComparison.Ordinal);
+          var index = line.IndexOf("=>", StringComparison.Ordinal);
           if (index < 0)
             continue;
 
           var value = line.Left(index).TrimEnd();
-          var key = line.Substring(index).TrimStart();
+          var key = line.Substring(index + 2).TrimStart();
           this._database.TryAdd(key, value);
         }
       }
