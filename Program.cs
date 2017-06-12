@@ -14,27 +14,45 @@ namespace Filesystem_Toolbox {
 
       using (var logic = new MainLogic()) {
         logic.LoadConfiguration();
-        // TODO: systray icon
         // TODO: allow configuring folders from within gui
-        // TODO: force running check from gui
         // TODO: allow configuring automatic checks from gui
-        using (var mainForm = new MainForm()) {
+        // TODO: force updating db from within gui
+
+        using (var mainForm = new MainForm())
+        using (var notificationIcon = new NotifyIcon {
+          Icon = mainForm.Icon,
+          Text = mainForm.Text,
+        }) {
+
+          // ReSharper disable once AccessToDisposedClosure
+          notificationIcon.DoubleClick += (_, __) => mainForm.Show();
+          notificationIcon.ContextMenuStrip = mainForm.cmsTrayMenu;
+          notificationIcon.Visible = true;
+
           using (var timer = new Timer(TimeSpan.FromSeconds(2).TotalMilliseconds)) {
-            timer.Elapsed += (_, __) => {
+            Action verificationAction = () => {
               // ReSharper disable AccessToDisposedClosure
               try {
                 timer.Stop();
-                mainForm.MarkVerificationRunning = true;
-                logic.RunChecks(mainForm.MarkFileChecksumFailed, mainForm.MarkFileException);
+                if (!mainForm.VerificationRunning) {
+                  mainForm.VerificationRunning = true;
+                  logic.RunChecks(mainForm.MarkFileChecksumFailed, mainForm.MarkFileException);
+                }
               } finally {
-                mainForm.MarkVerificationRunning = false;
+                mainForm.VerificationRunning = false;
                 timer.Start();
               }
               // ReSharper restore AccessToDisposedClosure
             };
+
+            mainForm.tsmiVerifyFolders.Click += (_, __) => verificationAction();
+            timer.Elapsed += (_, __) => verificationAction();
             timer.Start();
-            Application.Run(mainForm);
+
+            Application.Run();
           }
+
+          notificationIcon.Visible = false;
         }
 
         logic.SaveConfiguration();

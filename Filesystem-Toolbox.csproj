@@ -134,6 +134,8 @@
       <LastGenOutput>System.IO.FileInfoExtensions.cs</LastGenOutput>
     </Content>
     <Content Include="app.ico" />
+    <None Include="Resources\24x24 Verify Folders.png" />
+    <None Include="Resources\24x24 Exit Blue.png" />
     <None Include="Resources\24x24 Information.png" />
     <None Include="Resources\16x16 Warning.png" />
     <None Include="Resources\16x16 Error.png" />

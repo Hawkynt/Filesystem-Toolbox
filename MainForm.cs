@@ -48,10 +48,10 @@ namespace Filesystem_Toolbox {
 
     private readonly SortableBindingList<DgvEntry> _entries = new SortableBindingList<DgvEntry>();
 
-    internal bool MarkVerificationRunning {
-      set {
-        this.SafelyInvoke(() => this.tsslVerificationRunning.Visible = value);
-      }
+    private bool _verificationRunning;
+    internal bool VerificationRunning {
+      get { return this._verificationRunning; }
+      set { this.SafelyInvoke(() => this.tsmiVerifyFolders.Enabled = !(this.tsslVerificationRunning.Visible = this._verificationRunning = value)); }
     }
 
     internal MainForm() {
@@ -79,5 +79,25 @@ namespace Filesystem_Toolbox {
 
       entries.Add(entry);
     }
+
+    private void MainForm_FormClosing(object sender, FormClosingEventArgs e) {
+      if (e.CloseReason != CloseReason.UserClosing)
+        return;
+
+      this.Hide();
+      e.Cancel = true;
+    }
+
+    private void MainForm_Shown(object _, EventArgs __) {
+      this.Select();
+    }
+
+    private void tsmiShowForm_Click(object _, EventArgs __) {
+      this.Show();
+      this.Select();
+    }
+
+    private void tsmiExitApplication_Click(object _, EventArgs __) => Application.Exit();
+
   }
 }

@@ -83,9 +83,29 @@ namespace Filesystem_Toolbox.Properties {
         /// <summary>
         ///   Sucht eine lokalisierte Ressource vom Typ System.Drawing.Bitmap.
         /// </summary>
+        internal static System.Drawing.Bitmap _24x24_Exit_Blue {
+            get {
+                object obj = ResourceManager.GetObject("_24x24_Exit_Blue", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Ressource vom Typ System.Drawing.Bitmap.
+        /// </summary>
         internal static System.Drawing.Bitmap _24x24_Information {
             get {
                 object obj = ResourceManager.GetObject("_24x24_Information", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Ressource vom Typ System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap _24x24_Verify_Folders {
+            get {
+                object obj = ResourceManager.GetObject("_24x24_Verify_Folders", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
