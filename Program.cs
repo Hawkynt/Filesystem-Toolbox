@@ -16,7 +16,6 @@ namespace Filesystem_Toolbox {
         logic.LoadConfiguration();
         // TODO: allow configuring folders from within gui
         // TODO: allow configuring automatic checks from gui
-        // TODO: force updating db from within gui
 
         using (var mainForm = new MainForm())
         using (var notificationIcon = new NotifyIcon {
@@ -30,8 +29,10 @@ namespace Filesystem_Toolbox {
           notificationIcon.Visible = true;
 
           using (var timer = new Timer(TimeSpan.FromSeconds(2).TotalMilliseconds)) {
+
+            // ReSharper disable AccessToDisposedClosure
+
             Action verificationAction = () => {
-              // ReSharper disable AccessToDisposedClosure
               try {
                 timer.Stop();
                 if (!mainForm.VerificationRunning) {
@@ -42,10 +43,24 @@ namespace Filesystem_Toolbox {
                 mainForm.VerificationRunning = false;
                 timer.Start();
               }
-              // ReSharper restore AccessToDisposedClosure
             };
 
-            mainForm.tsmiVerifyFolders.Click += (_, __) => verificationAction();
+            mainForm.tsmiVerifyFolders.Click += (_, __) => verificationAction.BeginInvoke(verificationAction.EndInvoke, null);
+
+            Action rebuildAction = () => {
+              try {
+                logic.RebuildDatabases();
+              } finally {
+                mainForm.SafelyInvoke(form => form.tsmiRebuildDatabase.Enabled = true);
+              }
+            };
+            mainForm.tsmiRebuildDatabase.Click += (_, __) => {
+              mainForm.tsmiRebuildDatabase.Enabled = false;
+              rebuildAction.BeginInvoke(rebuildAction.EndInvoke, null);
+            };
+
+            // ReSharper restore AccessToDisposedClosure
+
             timer.Elapsed += (_, __) => verificationAction();
             timer.Start();
 

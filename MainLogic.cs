@@ -28,7 +28,9 @@ namespace Filesystem_Toolbox {
       this.MergeConfiguration();
     }
 
-    public void RunChecks(Action<FileInfo, string, string> onChecksumFailed, Action<FileInfo, string, Exception> onException) {
+    public void RebuildDatabases() => this._ExecuteOnAllCheckers(c => c.RebuildDatabase());
+
+    private void _ExecuteOnAllCheckers(Action<FolderIntegrityChecker> task) {
       var alreadyRun = new HashSet<FolderIntegrityChecker>();
       while (true) {
         FolderIntegrityChecker currentChecker;
@@ -39,10 +41,13 @@ namespace Filesystem_Toolbox {
           return;
 
         alreadyRun.Add(currentChecker);
-
-        currentChecker.VerifyIntegrity(onChecksumFailed, onException);
+        task(currentChecker);
       }
     }
+
+    public void RunChecks(Action<FileInfo, string, string> onChecksumFailed, Action<FileInfo, string, Exception> onException)
+      => this._ExecuteOnAllCheckers(c => c.VerifyIntegrity(onChecksumFailed, onException))
+      ;
 
     public void MergeConfiguration() {
       var lines = _IntegrityConfigurationFile.ReadAllLinesOrDefault();
@@ -99,5 +104,6 @@ namespace Filesystem_Toolbox {
     }
 
     #endregion
+
   }
 }

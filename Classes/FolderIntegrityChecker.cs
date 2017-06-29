@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -141,6 +142,34 @@ namespace Classes {
     }
 
     private void _TriggerDatabaseSave() => this._scheduledTask.Schedule();
+
+    public void RebuildDatabase() {
+      var stack = new Stack<DirectoryInfo>();
+      stack.Push(this.RootDirectory);
+      this._database.Clear();
+      while (stack.Count > 0) {
+        var current = stack.Pop();
+        foreach (var fsi in current.EnumerateFileSystemInfos()) {
+          var dir = fsi as DirectoryInfo;
+          if (dir != null) {
+            stack.Push(dir);
+            continue;
+          }
+
+          var file = fsi as FileInfo;
+          if (file == null)
+            continue;
+
+          try {
+            var checksum = _CalculateChecksum(file);
+            this._AddOrUpdateKey(file.FullName, checksum);
+            this._TriggerDatabaseSave();
+          } catch (Exception) {
+            ;
+          }
+        }
+      }
+    }
 
     public void SaveDatabase() {
       var file = this._databaseFile;

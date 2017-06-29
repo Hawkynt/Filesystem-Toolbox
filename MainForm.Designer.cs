@@ -32,6 +32,7 @@
       this.dgvProblems = new System.Windows.Forms.DataGridView();
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiExitApplication = new System.Windows.Forms.ToolStripMenuItem();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -96,10 +97,11 @@
       // 
       this.cmsTrayMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             tsmiShowForm,
+            this.tsmiRebuildDatabase,
             this.tsmiVerifyFolders,
             tsmiExitApplication});
       this.cmsTrayMenu.Name = "cmsTrayMenu";
-      this.cmsTrayMenu.Size = new System.Drawing.Size(153, 92);
+      this.cmsTrayMenu.Size = new System.Drawing.Size(153, 114);
       // 
       // tsmiVerifyFolders
       // 
@@ -107,6 +109,12 @@
       this.tsmiVerifyFolders.Name = "tsmiVerifyFolders";
       this.tsmiVerifyFolders.Size = new System.Drawing.Size(152, 22);
       this.tsmiVerifyFolders.Text = "Verify";
+      // 
+      // tsmiRebuildDatabase
+      // 
+      this.tsmiRebuildDatabase.Name = "tsmiRebuildDatabase";
+      this.tsmiRebuildDatabase.Size = new System.Drawing.Size(152, 22);
+      this.tsmiRebuildDatabase.Text = "Rebuild";
       // 
       // MainForm
       // 
@@ -135,6 +143,7 @@
     private System.Windows.Forms.ToolStripStatusLabel tsslVerificationRunning;
     internal System.Windows.Forms.ContextMenuStrip cmsTrayMenu;
     internal System.Windows.Forms.ToolStripMenuItem tsmiVerifyFolders;
+    internal System.Windows.Forms.ToolStripMenuItem tsmiRebuildDatabase;
   }
 }
 
