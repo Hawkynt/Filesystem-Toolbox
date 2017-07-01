@@ -31,8 +31,9 @@
       this.tsslVerificationRunning = new System.Windows.Forms.ToolStripStatusLabel();
       this.dgvProblems = new System.Windows.Forms.DataGridView();
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
-      this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
+      this.tCheckTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiExitApplication = new System.Windows.Forms.ToolStripMenuItem();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -63,7 +64,7 @@
       // 
       tsmiExitApplication.Image = global::Filesystem_Toolbox.Properties.Resources._24x24_Exit_Blue;
       tsmiExitApplication.Name = "tsmiExitApplication";
-      tsmiExitApplication.Size = new System.Drawing.Size(152, 22);
+      tsmiExitApplication.Size = new System.Drawing.Size(114, 22);
       tsmiExitApplication.Text = "Exit";
       tsmiExitApplication.Click += new System.EventHandler(this.tsmiExitApplication_Click);
       // 
@@ -71,7 +72,7 @@
       // 
       tsmiShowForm.Image = ((System.Drawing.Image)(resources.GetObject("tsmiShowForm.Image")));
       tsmiShowForm.Name = "tsmiShowForm";
-      tsmiShowForm.Size = new System.Drawing.Size(152, 22);
+      tsmiShowForm.Size = new System.Drawing.Size(114, 22);
       tsmiShowForm.Text = "Show";
       tsmiShowForm.Click += new System.EventHandler(this.tsmiShowForm_Click);
       // 
@@ -101,20 +102,26 @@
             this.tsmiVerifyFolders,
             tsmiExitApplication});
       this.cmsTrayMenu.Name = "cmsTrayMenu";
-      this.cmsTrayMenu.Size = new System.Drawing.Size(153, 114);
+      this.cmsTrayMenu.Size = new System.Drawing.Size(115, 92);
+      // 
+      // tsmiRebuildDatabase
+      // 
+      this.tsmiRebuildDatabase.Name = "tsmiRebuildDatabase";
+      this.tsmiRebuildDatabase.Size = new System.Drawing.Size(114, 22);
+      this.tsmiRebuildDatabase.Text = "Rebuild";
+      this.tsmiRebuildDatabase.Click += new System.EventHandler(this.tsmiRebuildDatabase_Click);
       // 
       // tsmiVerifyFolders
       // 
       this.tsmiVerifyFolders.Image = global::Filesystem_Toolbox.Properties.Resources._24x24_Verify_Folders;
       this.tsmiVerifyFolders.Name = "tsmiVerifyFolders";
-      this.tsmiVerifyFolders.Size = new System.Drawing.Size(152, 22);
+      this.tsmiVerifyFolders.Size = new System.Drawing.Size(114, 22);
       this.tsmiVerifyFolders.Text = "Verify";
+      this.tsmiVerifyFolders.Click += new System.EventHandler(this.tsmiVerifyFolders_Click);
       // 
-      // tsmiRebuildDatabase
+      // tCheckTimer
       // 
-      this.tsmiRebuildDatabase.Name = "tsmiRebuildDatabase";
-      this.tsmiRebuildDatabase.Size = new System.Drawing.Size(152, 22);
-      this.tsmiRebuildDatabase.Text = "Rebuild";
+      this.tCheckTimer.Tick += new System.EventHandler(this.tCheckTimer_Tick);
       // 
       // MainForm
       // 
@@ -144,6 +151,7 @@
     internal System.Windows.Forms.ContextMenuStrip cmsTrayMenu;
     internal System.Windows.Forms.ToolStripMenuItem tsmiVerifyFolders;
     internal System.Windows.Forms.ToolStripMenuItem tsmiRebuildDatabase;
+    private System.Windows.Forms.Timer tCheckTimer;
   }
 }
 
