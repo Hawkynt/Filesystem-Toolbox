@@ -31,6 +31,11 @@ namespace Filesystem_Toolbox {
     public void RebuildDatabases() => this._ExecuteOnAllCheckers(c => c.RebuildDatabase());
 
     private void _ExecuteOnAllCheckers(Action<FolderIntegrityChecker> task) {
+      if (task == null) throw new ArgumentNullException(nameof(task));
+#if NETFX_4
+      System.Diagnostics.Contracts.Contract.EndContractBlock();
+#endif
+
       var alreadyRun = new HashSet<FolderIntegrityChecker>();
       while (true) {
         FolderIntegrityChecker currentChecker;

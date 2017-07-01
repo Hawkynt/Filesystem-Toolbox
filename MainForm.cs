@@ -2,7 +2,6 @@
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
-using System.Threading;
 using System.Windows.Forms;
 using Filesystem_Toolbox.Properties;
 
@@ -79,7 +78,6 @@ namespace Filesystem_Toolbox {
       this.dgvProblems.DataSource = this._entries;
       this.tCheckTimer.Interval = (int)Settings.Default.CheckInterval.TotalMilliseconds;
       this.tCheckTimer.Start();
-      Thread.CurrentThread.Name = "GUI Thread";
     }
 
     internal void MarkFileChecksumFailed(FileInfo file, string oldChecksum, string newChecksum)
