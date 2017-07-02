@@ -11,6 +11,10 @@ namespace Filesystem_Toolbox {
       Application.EnableVisualStyles();
       Application.SetCompatibleTextRenderingDefault(false);
 
+      AppDomain.CurrentDomain.FirstChanceException += (s, e) => {
+        ;
+      };
+
       using (var logic = new MainLogic()) {
         logic.LoadConfiguration();
         // TODO: allow configuring folders from within gui

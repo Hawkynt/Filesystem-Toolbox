@@ -113,6 +113,9 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>System.IO.FileInfoExtensions.tt</DependentUpon>
     </Compile>
+    <Compile Include="..\..\Framework\System.IO.FileSystemInfoExtensions.cs">
+      <Link>Framework\System.IO.FileSystemInfoExtensions.cs</Link>
+    </Compile>
     <Compile Include="..\..\Framework\System.StringExtensions.cs">
       <Link>Framework\System.StringExtensions.cs</Link>
     </Compile>

@@ -71,71 +71,83 @@ namespace Classes {
     private void _Scheduler_OnExecute() => this.SaveDatabase();
 
     private void _FileSystemWatcher_OnRenamed(object _, RenamedEventArgs e) {
-      if (this._IsIgnoredFile(e.FullPath) || this._IsIgnoredFile(e.OldFullPath))
+      var newFile = new FileInfo(e.FullPath);
+      var oldFile = new FileInfo(e.OldFullPath);
+
+      if (this._IsIgnoredFile(newFile) || this._IsIgnoredFile(oldFile))
         return;
 
       this._EnqueueTask(
-        () => this._ChangeKeyName(e.OldFullPath, e.FullPath, () => _CalculateChecksum(new FileInfo(e.FullPath))),
-        e.OldFullPath,
-        e.FullPath
+        () => this._ChangeFileName(oldFile, newFile),
+        oldFile,
+        newFile
       );
     }
 
     private void _FileSystemWatcher_OnDeleted(object _, FileSystemEventArgs e) {
-      if (this._IsIgnoredFile(e.FullPath))
+      var file = new FileInfo(e.FullPath);
+      if (this._IsIgnoredFile(file))
         return;
 
-      this._EnqueueTask(() => this._RemoveKey(e.FullPath), e.FullPath);
+      this._EnqueueTask(() => this._RemoveFile(file), file);
     }
 
     private void _FileSystemWatcher_OnCreated(object _, FileSystemEventArgs e) {
-      if (this._IsIgnoredFile(e.FullPath))
+      var file = new FileInfo(e.FullPath);
+      if (this._IsIgnoredFile(file))
         return;
 
-      this._EnqueueTask(() => this._AddOrUpdateKey(e.FullPath, _CalculateChecksum(new FileInfo(e.FullPath))), e.FullPath);
+      this._EnqueueTask(() => this._AddOrUpdateFile(file), file);
     }
 
     private void _FileSystemWatcher_OnChanged(object _, FileSystemEventArgs e) {
-      if (this._IsIgnoredFile(e.FullPath))
+      var file = new FileInfo(e.FullPath);
+      if (this._IsIgnoredFile(file))
         return;
 
-      this._EnqueueTask(() => this._AddOrUpdateKey(e.FullPath, _CalculateChecksum(new FileInfo(e.FullPath))), e.FullPath);
+      this._EnqueueTask(() => this._AddOrUpdateFile(file), file);
     }
 
     #endregion
 
-    private bool _IsIgnoredFile(string fileName) => fileName == this._databaseFile.FullName;
+    private bool _IsIgnoredFile(FileInfo file) => file.FullName == this._databaseFile.FullName;
 
-    private void _EnqueueTask(Action task, string key, string alternateKey = null) {
+    private void _EnqueueTask(Action task, FileInfo file, FileInfo alternateFile = null) {
+      var key = _GetKey(file);
       this._taskQueue.DequeueByTag(key);
-      if (alternateKey != null)
-        this._taskQueue.DequeueByTag(alternateKey);
+      if (alternateFile != null)
+        this._taskQueue.DequeueByTag(_GetKey(alternateFile));
 
       this._taskQueue.Enqueue(task, key);
     }
 
-    private void _AddOrUpdateKey(string key, string value) {
-      this._database.AddOrUpdate(key, _ => value, (_, __) => value);
+    private void _AddOrUpdateFile(FileInfo file) {
+      var value = _CalculateChecksum(file);
+      this._database.AddOrUpdate(_GetKey(file), _ => value, (_, __) => value);
 
       this._TriggerDatabaseSave();
     }
 
-    private void _RemoveKey(string key) {
+    private void _RemoveFile(FileInfo file) {
       string _;
-      this._database.TryRemove(key, out _);
+      this._database.TryRemove(_GetKey(file), out _);
 
       this._TriggerDatabaseSave();
     }
 
-    private void _ChangeKeyName(string oldKey, string newKey, Func<string> valueFactory) {
-      if (valueFactory == null) throw new ArgumentNullException(nameof(valueFactory));
+    private void _ChangeFileName(FileInfo oldFile, FileInfo newFile) {
+      if (oldFile == null) throw new ArgumentNullException(nameof(oldFile));
+      if (newFile == null) throw new ArgumentNullException(nameof(newFile));
+#if NETFX_4
+      System.Diagnostics.Contracts.Contract.EndContractBlock();
+#endif
 
       string oldChecksum;
       this._database.TryAdd(
-        newKey,
-        this._database.TryRemove(oldKey, out oldChecksum)
+        _GetKey(newFile),
+        this._database.TryRemove(_GetKey(oldFile), out oldChecksum)
           ? oldChecksum
-          : valueFactory()
+          : _CalculateChecksum(newFile)
       );
 
       this._TriggerDatabaseSave();
@@ -157,12 +169,11 @@ namespace Classes {
           }
 
           var file = fsi as FileInfo;
-          if (file == null)
+          if (file == null || this._IsIgnoredFile(file))
             continue;
 
           try {
-            var checksum = _CalculateChecksum(file);
-            this._AddOrUpdateKey(file.FullName, checksum);
+            this._AddOrUpdateFile(file);
             this._TriggerDatabaseSave();
           } catch (Exception) {
             ;
@@ -176,11 +187,11 @@ namespace Classes {
       lock (file) {
         file.Refresh();
         if (file.Exists)
-          file.Attributes &= ~FileAttributes.System;
+          file.Attributes &= ~(FileAttributes.System | FileAttributes.Hidden);
 
-        file.WriteAllLines(this._database.Select(kvp => $@"{kvp.Value} => {kvp.Key}"));
+        file.WriteAllLines(this._database.OrderBy(i => new string('\\', i.Key.Count(c => c == '\\')) + i.Key).Select(kvp => $@"{kvp.Value} => {kvp.Key}"));
         file.TryEnableCompression();
-        file.Attributes |= FileAttributes.System;
+        file.Attributes |= FileAttributes.System | FileAttributes.Hidden;
 
       }
     }
@@ -212,7 +223,7 @@ namespace Classes {
       if (onInvalidChecksum == null) throw new ArgumentNullException(nameof(onInvalidChecksum));
 
       foreach (var entry in this._database) {
-        var file = new FileInfo(entry.Key);
+        var file = this.RootDirectory.File(entry.Key);
         var expected = entry.Value;
         string current;
         try {
@@ -235,5 +246,7 @@ namespace Classes {
     }
 
     private static string _CalculateChecksum(FileInfo file) => file.Length + ":" + Convert.ToBase64String(file.ComputeSHA512Hash());
+    private string _GetKey(FileInfo file) => file.RelativeTo(this.RootDirectory);
+
   }
 }
