@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using Classes;
 using Filesystem_Toolbox.Properties;
@@ -25,9 +26,11 @@ namespace Filesystem_Toolbox {
     }
 
     private class DgvEntry {
-      private readonly DirectoryInfo _root;
       private readonly FileInfo _file;
       private readonly Exception _exception;
+
+      [Browsable(false)]
+      public FolderIntegrityChecker Checker { get; }
 
       [Browsable(false)]
       public FileInfo File => this._file;
@@ -38,37 +41,37 @@ namespace Filesystem_Toolbox {
       public string Extension => this._file.Extension;
       public string Name => this._file.GetFilenameWithoutExtension();
       public string FolderName => this._file.Directory?.Name;
-      public string RelativePath => this._file.Directory?.RelativeTo(this._root);
+      public string RelativePath => this._file.Directory?.RelativeTo(this.Checker.RootDirectory);
       public string Path => this._file.Directory?.FullName;
       public string Checksum { get; }
       public string OldChecksum { get; }
       public string Exception => this._exception?.Message;
 
-      private DgvEntry(DirectoryInfo root, FileInfo file) {
-        this._root = root;
+      private DgvEntry(FolderIntegrityChecker checker, FileInfo file) {
         this._file = file;
+        this.Checker = checker;
       }
 
-      private DgvEntry(DirectoryInfo root, FileInfo file, string oldChecksum, string currentChecksum) : this(root, file) {
+      private DgvEntry(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string currentChecksum) : this(checker, file) {
         this.Checksum = currentChecksum;
         this.OldChecksum = oldChecksum;
         this.Image = Resources._16x16_Warning;
       }
 
-      private DgvEntry(DirectoryInfo root, FileInfo file, string oldChecksum, Exception exception) : this(root, file) {
+      private DgvEntry(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, Exception exception) : this(checker, file) {
         this._exception = exception;
         this.OldChecksum = oldChecksum;
         this.Image = Resources._16x16_Error;
       }
 
-      public static DgvEntry FromFailedChecksum(DirectoryInfo root, FileInfo file, string old, string current) => new DgvEntry(
-        root,
+      public static DgvEntry FromFailedChecksum(FolderIntegrityChecker checker, FileInfo file, string old, string current) => new DgvEntry(
+        checker,
         file,
         old,
         current);
 
-      public static DgvEntry FromException(DirectoryInfo root, FileInfo file, string old, Exception exception) => new DgvEntry(
-        root,
+      public static DgvEntry FromException(FolderIntegrityChecker checker, FileInfo file, string old, Exception exception) => new DgvEntry(
+        checker,
         file,
         old,
         exception);
@@ -103,10 +106,10 @@ namespace Filesystem_Toolbox {
     }
 
     internal void MarkFileChecksumFailed(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string newChecksum)
-      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromFailedChecksum(checker.RootDirectory, file, oldChecksum, newChecksum)));
+      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromFailedChecksum(checker, file, oldChecksum, newChecksum)));
 
     internal void MarkFileException(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, Exception exception)
-      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromException(checker.RootDirectory, file, oldChecksum, exception)));
+      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromException(checker, file, oldChecksum, exception)));
 
     private void _AddEntry(DgvEntry entry) {
       if (entry == null)
@@ -184,5 +187,15 @@ namespace Filesystem_Toolbox {
         this.tsslCurrentStatus.Text = $"{currentStatus.Text}({currentStatus.RunTime:mm':'ss})";
       this.tsslCurrentStatus.Visible = currentStatus.IsActionRunning;
     }
+
+    private void tsmiAcceptDifference_Click(object sender, EventArgs e) {
+      foreach (var item in this.dgvProblems.GetSelectedItems<DgvEntry>())
+        this._logic.AcceptChange(item.Checker, item.File);
+    }
+
+    private void cmsItems_Opening(object sender, CancelEventArgs e)
+      => e.Cancel = !this.dgvProblems.GetSelectedItems<DgvEntry>().Any()
+      ;
+
   }
 }

@@ -63,6 +63,16 @@ namespace Filesystem_Toolbox.Properties {
         /// <summary>
         ///   Sucht eine lokalisierte Ressource vom Typ System.Drawing.Bitmap.
         /// </summary>
+        internal static System.Drawing.Bitmap _16x16_Bricks {
+            get {
+                object obj = ResourceManager.GetObject("_16x16_Bricks", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Ressource vom Typ System.Drawing.Bitmap.
+        /// </summary>
         internal static System.Drawing.Bitmap _16x16_Error {
             get {
                 object obj = ResourceManager.GetObject("_16x16_Error", resourceCulture);
@@ -106,6 +116,16 @@ namespace Filesystem_Toolbox.Properties {
         internal static System.Drawing.Bitmap _24x24_Verify_Folders {
             get {
                 object obj = ResourceManager.GetObject("_24x24_Verify_Folders", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+        
+        /// <summary>
+        ///   Sucht eine lokalisierte Ressource vom Typ System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap tick_small {
+            get {
+                object obj = ResourceManager.GetObject("tick_small", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
