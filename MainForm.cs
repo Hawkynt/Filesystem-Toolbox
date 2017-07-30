@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using Classes;
 using Filesystem_Toolbox.Properties;
 
 namespace Filesystem_Toolbox {
@@ -10,43 +11,64 @@ namespace Filesystem_Toolbox {
 
     #region nested types
 
+    private struct WindowStatus {
+      public WindowStatus(string text) {
+        this.Text = text;
+        this.StartTimeUtc = DateTime.UtcNow;
+      }
+
+      public bool IsActionRunning => !string.IsNullOrWhiteSpace(this.Text);
+      public string Text { get; }
+      public DateTime StartTimeUtc { get; }
+      public TimeSpan RunTime => DateTime.UtcNow - this.StartTimeUtc;
+      public static WindowStatus Empty { get; } = new WindowStatus(null);
+    }
+
     private class DgvEntry {
+      private readonly DirectoryInfo _root;
       private readonly FileInfo _file;
       private readonly Exception _exception;
 
       [Browsable(false)]
       public FileInfo File => this._file;
 
+      [DataGridViewColumnWidth(24)]
       public Image Image { get; }
       public string FileName => this._file.Name;
       public string Extension => this._file.Extension;
+      public string Name => this._file.GetFilenameWithoutExtension();
+      public string FolderName => this._file.Directory?.Name;
+      public string RelativePath => this._file.Directory?.RelativeTo(this._root);
       public string Path => this._file.Directory?.FullName;
       public string Checksum { get; }
       public string OldChecksum { get; }
       public string Exception => this._exception?.Message;
 
-      private DgvEntry(FileInfo file) {
+      private DgvEntry(DirectoryInfo root, FileInfo file) {
+        this._root = root;
         this._file = file;
       }
 
-      private DgvEntry(FileInfo file, string oldChecksum, string currentChecksum) : this(file) {
+      private DgvEntry(DirectoryInfo root, FileInfo file, string oldChecksum, string currentChecksum) : this(root, file) {
         this.Checksum = currentChecksum;
         this.OldChecksum = oldChecksum;
         this.Image = Resources._16x16_Warning;
       }
 
-      private DgvEntry(FileInfo file, string oldChecksum, Exception exception) : this(file) {
+      private DgvEntry(DirectoryInfo root, FileInfo file, string oldChecksum, Exception exception) : this(root, file) {
         this._exception = exception;
         this.OldChecksum = oldChecksum;
         this.Image = Resources._16x16_Error;
       }
 
-      public static DgvEntry FromFailedChecksum(FileInfo file, string old, string current) => new DgvEntry(
+      public static DgvEntry FromFailedChecksum(DirectoryInfo root, FileInfo file, string old, string current) => new DgvEntry(
+        root,
         file,
         old,
         current);
 
-      public static DgvEntry FromException(FileInfo file, string old, Exception exception) => new DgvEntry(
+      public static DgvEntry FromException(DirectoryInfo root, FileInfo file, string old, Exception exception) => new DgvEntry(
+        root,
         file,
         old,
         exception);
@@ -55,6 +77,7 @@ namespace Filesystem_Toolbox {
     #endregion
 
     private readonly SortableBindingList<DgvEntry> _entries = new SortableBindingList<DgvEntry>();
+    private WindowStatus _currentStatus;
 
     private bool _verificationRunning;
 
@@ -62,9 +85,8 @@ namespace Filesystem_Toolbox {
       get { return this._verificationRunning; }
       set {
         this._verificationRunning = value;
-        this.SafelyInvoke(() => {
-          this.tsmiVerifyFolders.Enabled = !(this.tsslVerificationRunning.Visible = value);
-        });
+        this._currentStatus = value ? new WindowStatus("Verification Running...") : WindowStatus.Empty;
+        this.SafelyInvoke(new Action(() => this.tsmiVerifyFolders.Enabled = !value));
       }
     }
 
@@ -80,11 +102,11 @@ namespace Filesystem_Toolbox {
       this.tCheckTimer.Start();
     }
 
-    internal void MarkFileChecksumFailed(FileInfo file, string oldChecksum, string newChecksum)
-      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromFailedChecksum(file, oldChecksum, newChecksum)));
+    internal void MarkFileChecksumFailed(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string newChecksum)
+      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromFailedChecksum(checker.RootDirectory, file, oldChecksum, newChecksum)));
 
-    internal void MarkFileException(FileInfo file, string oldChecksum, Exception exception)
-      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromException(file, oldChecksum, exception)));
+    internal void MarkFileException(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, Exception exception)
+      => this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromException(checker.RootDirectory, file, oldChecksum, exception)));
 
     private void _AddEntry(DgvEntry entry) {
       if (entry == null)
@@ -156,5 +178,11 @@ namespace Filesystem_Toolbox {
       );
     }
 
+    private void tStatusTimer_Tick(object sender, EventArgs e) {
+      var currentStatus = this._currentStatus;
+      if (currentStatus.IsActionRunning)
+        this.tsslCurrentStatus.Text = $"{currentStatus.Text}({currentStatus.RunTime:mm':'ss})";
+      this.tsslCurrentStatus.Visible = currentStatus.IsActionRunning;
+    }
   }
 }

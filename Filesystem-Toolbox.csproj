@@ -125,6 +125,9 @@
     <Compile Include="..\..\Framework\System.Windows.Forms.ControlExtensions.cs">
       <Link>Framework\System.Windows.Forms.ControlExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\..\Framework\System.Windows.Forms.DataGridViewExtensions.cs">
+      <Link>Framework\System.Windows.Forms.DataGridViewExtensions.cs</Link>
+    </Compile>
     <Compile Include="..\..\Libraries\ApplicationTitler.cs">
       <Link>Libraries\ApplicationTitler.cs</Link>
     </Compile>

@@ -2,14 +2,13 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using Classes;
 
 namespace Filesystem_Toolbox {
   class MainLogic : IDisposable {
 
-    private static readonly DirectoryInfo _APPLICATION_FOLDER = new DirectoryInfo(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location));
+    private static readonly DirectoryInfo _APPLICATION_FOLDER = new DirectoryInfo(Path.GetDirectoryName(AppDomain.CurrentDomain.SetupInformation.ConfigurationFile));
     private const string _INTEGRITY_CONFIGURATION_FILE = @".\CheckedFolders.lst";
 
     private readonly List<FolderIntegrityChecker> _integrityCheckers = new List<FolderIntegrityChecker>();
@@ -50,8 +49,8 @@ namespace Filesystem_Toolbox {
       }
     }
 
-    public void RunChecks(Action<FileInfo, string, string> onChecksumFailed, Action<FileInfo, string, Exception> onException)
-      => this._ExecuteOnAllCheckers(c => c.VerifyIntegrity(onChecksumFailed, onException))
+    public void RunChecks(Action<FolderIntegrityChecker, FileInfo, string, string> onChecksumFailed, Action<FolderIntegrityChecker, FileInfo, string, Exception> onException)
+      => this._ExecuteOnAllCheckers(c => c.VerifyIntegrity((f, o, n) => onChecksumFailed(c, f, o, n), (f, o, e) => onException(c, f, o, e)))
       ;
 
     public void MergeConfiguration() {

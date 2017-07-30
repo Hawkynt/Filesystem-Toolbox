@@ -28,12 +28,13 @@
       System.Windows.Forms.ToolStripMenuItem tsmiExitApplication;
       System.Windows.Forms.ToolStripMenuItem tsmiShowForm;
       System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
-      this.tsslVerificationRunning = new System.Windows.Forms.ToolStripStatusLabel();
+      this.tsslCurrentStatus = new System.Windows.Forms.ToolStripStatusLabel();
       this.dgvProblems = new System.Windows.Forms.DataGridView();
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
       this.tCheckTimer = new System.Windows.Forms.Timer(this.components);
+      this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiExitApplication = new System.Windows.Forms.ToolStripMenuItem();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -45,20 +46,19 @@
       // ssStatusBar
       // 
       ssStatusBar.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.tsslVerificationRunning});
+            this.tsslCurrentStatus});
       ssStatusBar.Location = new System.Drawing.Point(0, 337);
       ssStatusBar.Name = "ssStatusBar";
       ssStatusBar.Size = new System.Drawing.Size(683, 22);
       ssStatusBar.TabIndex = 1;
       ssStatusBar.Text = "statusStrip1";
       // 
-      // tsslVerificationRunning
+      // tsslCurrentStatus
       // 
-      this.tsslVerificationRunning.Image = global::Filesystem_Toolbox.Properties.Resources._24x24_Information;
-      this.tsslVerificationRunning.Name = "tsslVerificationRunning";
-      this.tsslVerificationRunning.Size = new System.Drawing.Size(115, 17);
-      this.tsslVerificationRunning.Text = "Verfying folders...";
-      this.tsslVerificationRunning.Visible = false;
+      this.tsslCurrentStatus.Image = global::Filesystem_Toolbox.Properties.Resources._24x24_Information;
+      this.tsslCurrentStatus.Name = "tsslCurrentStatus";
+      this.tsslCurrentStatus.Size = new System.Drawing.Size(16, 17);
+      this.tsslCurrentStatus.Visible = false;
       // 
       // tsmiExitApplication
       // 
@@ -123,6 +123,12 @@
       // 
       this.tCheckTimer.Tick += new System.EventHandler(this.tCheckTimer_Tick);
       // 
+      // tStatusTimer
+      // 
+      this.tStatusTimer.Enabled = true;
+      this.tStatusTimer.Interval = 1000;
+      this.tStatusTimer.Tick += new System.EventHandler(this.tStatusTimer_Tick);
+      // 
       // MainForm
       // 
       this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -147,11 +153,12 @@
     #endregion
 
     private System.Windows.Forms.DataGridView dgvProblems;
-    private System.Windows.Forms.ToolStripStatusLabel tsslVerificationRunning;
+    private System.Windows.Forms.ToolStripStatusLabel tsslCurrentStatus;
     internal System.Windows.Forms.ContextMenuStrip cmsTrayMenu;
     internal System.Windows.Forms.ToolStripMenuItem tsmiVerifyFolders;
     internal System.Windows.Forms.ToolStripMenuItem tsmiRebuildDatabase;
     private System.Windows.Forms.Timer tCheckTimer;
+    private System.Windows.Forms.Timer tStatusTimer;
   }
 }
 
