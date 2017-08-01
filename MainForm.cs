@@ -189,8 +189,10 @@ namespace Filesystem_Toolbox {
     }
 
     private void tsmiAcceptDifference_Click(object sender, EventArgs e) {
-      foreach (var item in this.dgvProblems.GetSelectedItems<DgvEntry>())
+      foreach (var item in this.dgvProblems.GetSelectedItems<DgvEntry>()) {
         this._logic.AcceptChange(item.Checker, item.File);
+        this._entries.Remove(item);
+      }
     }
 
     private void cmsItems_Opening(object sender, CancelEventArgs e)

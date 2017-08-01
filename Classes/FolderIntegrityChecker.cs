@@ -36,7 +36,7 @@ namespace Classes {
       watcher.Renamed += this._FileSystemWatcher_OnRenamed;
       watcher.InternalBufferSize = 65536;
 
-      this._scheduledTask = new ScheduledTask(this._Scheduler_OnExecute, deferredTime: TimeSpan.FromMinutes(5));
+      this._scheduledTask = new ScheduledTask(this._Scheduler_OnExecute, deferredTime: TimeSpan.FromSeconds(10));
 
     }
 
@@ -113,24 +113,24 @@ namespace Classes {
     private bool _IsIgnoredFile(FileInfo file) => file.FullName == this._databaseFile.FullName;
 
     private void _EnqueueTask(Action task, FileInfo file, FileInfo alternateFile = null) {
-      var key = _GetKey(file);
+      var key = this._GetKey(file);
       this._taskQueue.DequeueByTag(key);
       if (alternateFile != null)
-        this._taskQueue.DequeueByTag(_GetKey(alternateFile));
+        this._taskQueue.DequeueByTag(this._GetKey(alternateFile));
 
       this._taskQueue.Enqueue(task, key);
     }
 
     private void _AddOrUpdateFile(FileInfo file) {
       var value = _CalculateChecksum(file);
-      this._database.AddOrUpdate(_GetKey(file), _ => value, (_, __) => value);
+      this._database.AddOrUpdate(this._GetKey(file), _ => value, (_, __) => value);
 
       this._TriggerDatabaseSave();
     }
 
     private void _RemoveFile(FileInfo file) {
       string _;
-      this._database.TryRemove(_GetKey(file), out _);
+      this._database.TryRemove(this._GetKey(file), out _);
 
       this._TriggerDatabaseSave();
     }
@@ -143,9 +143,8 @@ namespace Classes {
 #endif
 
       string oldChecksum;
-      this._database.TryAdd(
-        _GetKey(newFile),
-        this._database.TryRemove(_GetKey(oldFile), out oldChecksum)
+      this._database.TryAdd(this._GetKey(newFile),
+        this._database.TryRemove(this._GetKey(oldFile), out oldChecksum)
           ? oldChecksum
           : _CalculateChecksum(newFile)
       );
@@ -154,6 +153,23 @@ namespace Classes {
     }
 
     private void _TriggerDatabaseSave() => this._scheduledTask.Schedule();
+
+    public void UpdateFile(FileInfo file) {
+      if (file.FullName.StartsNotWith(this.RootDirectory.FullName))
+        throw new ArgumentException("File is not relative to root directory", nameof(file));
+
+      file.Refresh();
+      if (file.NotExists()) {
+        this._RemoveFile(file);
+        return;
+      }
+
+      try {
+        this._AddOrUpdateFile(file);
+      } catch (Exception) {
+        ;
+      }
+    }
 
     public void RebuildDatabase() {
       var stack = new Stack<DirectoryInfo>();
@@ -174,7 +190,6 @@ namespace Classes {
 
           try {
             this._AddOrUpdateFile(file);
-            this._TriggerDatabaseSave();
           } catch (Exception) {
             ;
           }

@@ -30,20 +30,20 @@
       System.Windows.Forms.ToolStripMenuItem tsmiExitApplication;
       this.tsslCurrentStatus = new System.Windows.Forms.ToolStripStatusLabel();
       this.dgvProblems = new System.Windows.Forms.DataGridView();
+      this.cmsItems = new System.Windows.Forms.ContextMenuStrip(this.components);
+      this.tsmiAcceptDifference = new System.Windows.Forms.ToolStripMenuItem();
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
       this.tCheckTimer = new System.Windows.Forms.Timer(this.components);
       this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
-      this.cmsItems = new System.Windows.Forms.ContextMenuStrip(this.components);
-      this.tsmiAcceptDifference = new System.Windows.Forms.ToolStripMenuItem();
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
       tsmiExitApplication = new System.Windows.Forms.ToolStripMenuItem();
       ssStatusBar.SuspendLayout();
       ((System.ComponentModel.ISupportInitialize)(this.dgvProblems)).BeginInit();
-      this.cmsTrayMenu.SuspendLayout();
       this.cmsItems.SuspendLayout();
+      this.cmsTrayMenu.SuspendLayout();
       this.SuspendLayout();
       // 
       // ssStatusBar
@@ -90,13 +90,28 @@
       this.dgvProblems.ContextMenuStrip = this.cmsItems;
       this.dgvProblems.Dock = System.Windows.Forms.DockStyle.Fill;
       this.dgvProblems.Location = new System.Drawing.Point(0, 0);
-      this.dgvProblems.MultiSelect = false;
       this.dgvProblems.Name = "dgvProblems";
       this.dgvProblems.ReadOnly = true;
       this.dgvProblems.RowHeadersVisible = false;
       this.dgvProblems.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
       this.dgvProblems.Size = new System.Drawing.Size(683, 337);
       this.dgvProblems.TabIndex = 0;
+      // 
+      // cmsItems
+      // 
+      this.cmsItems.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.tsmiAcceptDifference});
+      this.cmsItems.Name = "cmsItems";
+      this.cmsItems.Size = new System.Drawing.Size(112, 26);
+      this.cmsItems.Opening += new System.ComponentModel.CancelEventHandler(this.cmsItems_Opening);
+      // 
+      // tsmiAcceptDifference
+      // 
+      this.tsmiAcceptDifference.Image = global::Filesystem_Toolbox.Properties.Resources.tick_small;
+      this.tsmiAcceptDifference.Name = "tsmiAcceptDifference";
+      this.tsmiAcceptDifference.Size = new System.Drawing.Size(111, 22);
+      this.tsmiAcceptDifference.Text = "Accept";
+      this.tsmiAcceptDifference.Click += new System.EventHandler(this.tsmiAcceptDifference_Click);
       // 
       // cmsTrayMenu
       // 
@@ -134,22 +149,6 @@
       this.tStatusTimer.Interval = 1000;
       this.tStatusTimer.Tick += new System.EventHandler(this.tStatusTimer_Tick);
       // 
-      // cmsItems
-      // 
-      this.cmsItems.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.tsmiAcceptDifference});
-      this.cmsItems.Name = "cmsItems";
-      this.cmsItems.Size = new System.Drawing.Size(112, 26);
-      this.cmsItems.Opening += new System.ComponentModel.CancelEventHandler(this.cmsItems_Opening);
-      // 
-      // tsmiAcceptDifference
-      // 
-      this.tsmiAcceptDifference.Image = global::Filesystem_Toolbox.Properties.Resources.tick_small;
-      this.tsmiAcceptDifference.Name = "tsmiAcceptDifference";
-      this.tsmiAcceptDifference.Size = new System.Drawing.Size(111, 22);
-      this.tsmiAcceptDifference.Text = "Accept";
-      this.tsmiAcceptDifference.Click += new System.EventHandler(this.tsmiAcceptDifference_Click);
-      // 
       // MainForm
       // 
       this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -165,8 +164,8 @@
       ssStatusBar.ResumeLayout(false);
       ssStatusBar.PerformLayout();
       ((System.ComponentModel.ISupportInitialize)(this.dgvProblems)).EndInit();
-      this.cmsTrayMenu.ResumeLayout(false);
       this.cmsItems.ResumeLayout(false);
+      this.cmsTrayMenu.ResumeLayout(false);
       this.ResumeLayout(false);
       this.PerformLayout();
 
