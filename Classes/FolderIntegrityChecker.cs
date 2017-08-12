@@ -24,6 +24,8 @@ namespace Classes {
       set { this._fileSystemWatcher.EnableRaisingEvents = value; }
     }
 
+    public IEnumerable<FileInfo> KnownFiles => this._database.Keys.Select(k => this.RootDirectory.File(k));
+
     public FolderIntegrityChecker(DirectoryInfo rootDirectory) {
       this.RootDirectory = rootDirectory;
       this._databaseFile = rootDirectory.File(_DATABASE_FILENAME);
@@ -31,7 +33,7 @@ namespace Classes {
       var watcher = this._fileSystemWatcher = new FileSystemWatcher(rootDirectory.FullName);
       watcher.NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size;
       watcher.Changed += this._FileSystemWatcher_OnChanged;
-      watcher.Created += this._FileSystemWatcher_OnCreated;
+      watcher.Created += this._FileSystemWatcher_OnChanged;
       watcher.Deleted += this._FileSystemWatcher_OnDeleted;
       watcher.Renamed += this._FileSystemWatcher_OnRenamed;
       watcher.InternalBufferSize = 65536;
@@ -90,14 +92,6 @@ namespace Classes {
         return;
 
       this._EnqueueTask(() => this._RemoveFile(file), file);
-    }
-
-    private void _FileSystemWatcher_OnCreated(object _, FileSystemEventArgs e) {
-      var file = new FileInfo(e.FullPath);
-      if (this._IsIgnoredFile(file))
-        return;
-
-      this._EnqueueTask(() => this._AddOrUpdateFile(file), file);
     }
 
     private void _FileSystemWatcher_OnChanged(object _, FileSystemEventArgs e) {
@@ -252,6 +246,12 @@ namespace Classes {
 
         onInvalidChecksum(file, expected, current);
       }
+
+      foreach (
+        var file in
+          this.RootDirectory.EnumerateFiles("*.*", SearchOption.AllDirectories)
+            .Where(f => !(this._IsIgnoredFile(f) || this._database.ContainsKey(this._GetKey(f)))))
+        onInvalidChecksum(file, null, _CalculateChecksum(file));
     }
 
     public static FolderIntegrityChecker Create(DirectoryInfo rootDirectory) {
