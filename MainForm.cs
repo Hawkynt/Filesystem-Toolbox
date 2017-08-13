@@ -93,6 +93,17 @@ namespace Filesystem_Toolbox {
       }
     }
 
+    private bool _rebuildRunning;
+
+    internal bool RebuildRunning {
+      get { return this._rebuildRunning; }
+      set {
+        this._rebuildRunning = value;
+        this._currentStatus = value ? new WindowStatus("Rebuild Running...") : WindowStatus.Empty;
+        this.SafelyInvoke(new Action(() => this.tsmiRebuildDatabase.Enabled = !value));
+      }
+    }
+
     private readonly MainLogic _logic;
 
     internal MainForm(MainLogic logic = null) {
@@ -167,15 +178,28 @@ namespace Filesystem_Toolbox {
     private void tsmiVerifyFolders_Click(object _, EventArgs __) => this.tCheckTimer_Tick(null, null);
 
     private void tsmiRebuildDatabase_Click(object _, EventArgs __) {
-      this.tsmiRebuildDatabase.Enabled = false;
+      if (
+        MessageBox.Show(
+          "This will reset all checksum and rebuild the whole database.\r\nAre you sure?",
+          "Rebuild Database",
+          MessageBoxButtons.YesNo,
+          MessageBoxIcon.Question) != DialogResult.Yes)
+        return;
+
       this.Async(
         () => {
+          var isRunning = (bool?)null;
           try {
+            isRunning = this.RebuildRunning;
+            if (isRunning.Value)
+              return;
+
+            this.RebuildRunning = true;
             this._logic?.RebuildDatabases();
           } finally {
-            this.SafelyInvoke(() => {
-              this.tsmiRebuildDatabase.Enabled = true;
-            });
+            if (isRunning != null && !isRunning.Value)
+              this.RebuildRunning = false;
+
           }
         }
       );

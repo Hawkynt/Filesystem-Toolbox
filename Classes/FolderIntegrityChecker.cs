@@ -250,8 +250,16 @@ namespace Classes {
       foreach (
         var file in
           this.RootDirectory.EnumerateFiles("*.*", SearchOption.AllDirectories)
-            .Where(f => !(this._IsIgnoredFile(f) || this._database.ContainsKey(this._GetKey(f)))))
-        onInvalidChecksum(file, null, _CalculateChecksum(file));
+            .Where(f => !(this._IsIgnoredFile(f) || this._database.ContainsKey(this._GetKey(f))))) {
+        string current;
+        try {
+          current = _CalculateChecksum(file);
+        } catch (Exception exception) {
+          onException?.Invoke(file, null, exception);
+          continue;
+        }
+        onInvalidChecksum(file, null, current);
+      }
     }
 
     public static FolderIntegrityChecker Create(DirectoryInfo rootDirectory) {
