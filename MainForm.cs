@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 using Classes;
 using Filesystem_Toolbox.Properties;
@@ -105,6 +106,7 @@ namespace Filesystem_Toolbox {
     }
 
     private readonly MainLogic _logic;
+    private readonly System.Threading.Timer _checkTimer;
 
     internal MainForm(MainLogic logic = null) {
       this._logic = logic;
@@ -112,8 +114,8 @@ namespace Filesystem_Toolbox {
       this.SetFormTitle();
 
       this.dgvProblems.DataSource = this._entries;
-      this.tCheckTimer.Interval = (int)Settings.Default.CheckInterval.TotalMilliseconds;
-      this.tCheckTimer.Start();
+      this._checkTimer = new System.Threading.Timer(this.tCheckTimer_Tick);
+      this._checkTimer.Change(Settings.Default.CheckInterval, Timeout.InfiniteTimeSpan);
     }
 
     internal void MarkFileChecksumFailed(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string newChecksum)
@@ -153,29 +155,25 @@ namespace Filesystem_Toolbox {
 
     private void tsmiExitApplication_Click(object _, EventArgs __) => Application.Exit();
 
-    private void tCheckTimer_Tick(object _, EventArgs __) {
-      this.tCheckTimer.Stop();
-      this.Async(
-        () => {
-          var isRunning = (bool?)null;
-          try {
-            isRunning = this.VerificationRunning;
-            if (isRunning.Value)
-              return;
+    private void tCheckTimer_Tick(object _) {
+      this._checkTimer.Change(Timeout.Infinite, Timeout.Infinite);
+      var isRunning = (bool?)null;
+      try {
+        isRunning = this.VerificationRunning;
+        if (isRunning.Value)
+          return;
 
-            this.VerificationRunning = true;
-            this._logic?.RunChecks(this.MarkFileChecksumFailed, this.MarkFileException);
-          } finally {
-            if (isRunning != null && !isRunning.Value)
-              this.VerificationRunning = false;
+        this.VerificationRunning = true;
+        this._logic?.RunChecks(this.MarkFileChecksumFailed, this.MarkFileException);
+      } finally {
+        if (isRunning != null && !isRunning.Value)
+          this.VerificationRunning = false;
 
-            this.tCheckTimer.Start();
-          }
-        }
-      );
+        this._checkTimer.Change(Settings.Default.CheckInterval, Timeout.InfiniteTimeSpan);
+      }
     }
 
-    private void tsmiVerifyFolders_Click(object _, EventArgs __) => this.tCheckTimer_Tick(null, null);
+    private void tsmiVerifyFolders_Click(object _, EventArgs __) => this.Async(this.tCheckTimer_Tick);
 
     private void tsmiRebuildDatabase_Click(object _, EventArgs __) {
       if (

@@ -35,7 +35,6 @@
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
-      this.tCheckTimer = new System.Windows.Forms.Timer(this.components);
       this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -139,10 +138,6 @@
       this.tsmiVerifyFolders.Text = "Verify";
       this.tsmiVerifyFolders.Click += new System.EventHandler(this.tsmiVerifyFolders_Click);
       // 
-      // tCheckTimer
-      // 
-      this.tCheckTimer.Tick += new System.EventHandler(this.tCheckTimer_Tick);
-      // 
       // tStatusTimer
       // 
       this.tStatusTimer.Enabled = true;
@@ -178,7 +173,6 @@
     internal System.Windows.Forms.ContextMenuStrip cmsTrayMenu;
     internal System.Windows.Forms.ToolStripMenuItem tsmiVerifyFolders;
     internal System.Windows.Forms.ToolStripMenuItem tsmiRebuildDatabase;
-    private System.Windows.Forms.Timer tCheckTimer;
     private System.Windows.Forms.Timer tStatusTimer;
     private System.Windows.Forms.ContextMenuStrip cmsItems;
     private System.Windows.Forms.ToolStripMenuItem tsmiAcceptDifference;
