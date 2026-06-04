@@ -1,0 +1,32 @@
+name: CI
+
+# Event-driven (no cron). release.yml and nightly.yml reuse this.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_call: {}
+
+# Force JavaScript-based actions to run on Node 24 instead of the deprecated Node 20 ahead of
+# the 2026-06-16 hard cutover, until we bump each action to a Node-24-native major version.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  # The app is a Windows WinExe (.NET Framework), so the build runs on windows only.
+  # The 8.0.x SDK drives MSBuild; the windows runner carries the net4x targeting packs.
+  build:
+    name: build (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0                       # version.pl counts commits per project
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Stamp per-package versions
+        shell: bash
+        run: perl .github/workflows/scripts/version.pl --stamp
+      - run: dotnet build Filesystem-Toolbox.sln --configuration Release

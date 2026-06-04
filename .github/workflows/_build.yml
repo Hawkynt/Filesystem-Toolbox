@@ -1,0 +1,46 @@
+name: Build artifacts
+
+# Shared build/publish block, called by release.yml (manual) and nightly.yml (auto).
+# Per-package versioning: version.pl --stamp writes the csproj's OWN <Version> +
+# its folder's commit count. Publishes the Windows app binary; no NuGet package.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Force JavaScript-based actions to run on Node 24 instead of the deprecated Node 20 ahead of
+# the 2026-06-16 hard cutover, until we bump each action to a Node-24-native major version.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  build:
+    runs-on: windows-latest               # the app is a Windows WinExe (.NET Framework)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Stamp per-package versions
+        shell: bash
+        run: perl .github/workflows/scripts/version.pl --stamp
+
+      - name: Publish app
+        run: dotnet publish Filesystem-Toolbox.csproj -c Release -o dist/Filesystem-Toolbox --nologo
+      - name: Zip app
+        shell: pwsh
+        run: Compress-Archive -Path dist/Filesystem-Toolbox/* -DestinationPath dist/Filesystem-Toolbox.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-artifacts
+          path: dist/*.zip
+          if-no-files-found: ignore

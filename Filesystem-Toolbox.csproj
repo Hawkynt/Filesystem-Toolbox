@@ -6,6 +6,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{DF58FE5C-353B-4629-AE6A-3A4377E7DE0B}</ProjectGuid>
     <OutputType>WinExe</OutputType>
+    <Version>1.0.0</Version>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Filesystem_Toolbox</RootNamespace>
     <AssemblyName>Filesystem-Toolbox</AssemblyName>
