@@ -29,9 +29,4 @@
     <PackageReference Include="FrameworkExtensions.System.Windows.Forms" Version="1.0.0.1347" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Update="CheckedFolders.lst">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
 </Project>

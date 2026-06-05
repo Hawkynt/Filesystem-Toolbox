@@ -105,18 +105,19 @@ namespace Filesystem_Toolbox {
       }
     }
 
-    private static readonly TimeSpan _CHECK_INTERVAL = TimeSpan.FromMinutes(10);
+    private readonly TimeSpan _checkInterval;
     private readonly ToolboxService _logic;
     private readonly System.Threading.Timer _checkTimer;
 
     internal MainForm(ToolboxService logic = null) {
       this._logic = logic;
+      this._checkInterval = TimeSpan.FromMinutes(logic?.Configuration?.CheckIntervalMinutes ?? 10);
       this.InitializeComponent();
       this.SetFormTitle();
 
       this.dgvProblems.DataSource = this._entries;
       this._checkTimer = new System.Threading.Timer(this.tCheckTimer_Tick);
-      this._checkTimer.Change(_CHECK_INTERVAL, Timeout.InfiniteTimeSpan);
+      this._checkTimer.Change(this._checkInterval, Timeout.InfiniteTimeSpan);
     }
 
     internal void MarkFileChecksumFailed(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string newChecksum)
@@ -170,7 +171,7 @@ namespace Filesystem_Toolbox {
         if (isRunning != null && !isRunning.Value)
           this.VerificationRunning = false;
 
-        this._checkTimer.Change(_CHECK_INTERVAL, Timeout.InfiniteTimeSpan);
+        this._checkTimer.Change(this._checkInterval, Timeout.InfiniteTimeSpan);
       }
     }
 

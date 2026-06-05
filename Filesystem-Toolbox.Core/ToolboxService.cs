@@ -1,30 +1,49 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Filesystem_Toolbox.Core.Configuration;
 using Filesystem_Toolbox.Core.Integrity;
 
 namespace Filesystem_Toolbox.Core {
   public class ToolboxService : IDisposable {
 
     private static readonly DirectoryInfo _APPLICATION_FOLDER = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-    private const string _INTEGRITY_CONFIGURATION_FILE = @".\CheckedFolders.lst";
+    private const string _CONFIGURATION_FILE = "FilesystemToolbox.json";
+    private const string _LEGACY_CONFIGURATION_FILE = "CheckedFolders.lst";
 
     private readonly List<FolderIntegrityChecker> _integrityCheckers = new List<FolderIntegrityChecker>();
-    private static FileInfo _IntegrityConfigurationFile => _APPLICATION_FOLDER.File(_INTEGRITY_CONFIGURATION_FILE);
+    private readonly Dictionary<FolderIntegrityChecker, WatchedFolderConfiguration> _folderConfigurations = new Dictionary<FolderIntegrityChecker, WatchedFolderConfiguration>();
 
-    public void SaveConfiguration() {
-      string[] integrityCheckedFolders;
-      lock (this._integrityCheckers)
-        integrityCheckedFolders = this._integrityCheckers.Select(i => i.RootDirectory.FullName).ToArray();
+    private static FileInfo _ConfigurationFile => _APPLICATION_FOLDER.File(_CONFIGURATION_FILE);
+    private static FileInfo _LegacyConfigurationFile => _APPLICATION_FOLDER.File(_LEGACY_CONFIGURATION_FILE);
 
-      _IntegrityConfigurationFile.WriteAllLines(integrityCheckedFolders);
-    }
+    public ToolboxConfiguration Configuration { get; private set; } = new ToolboxConfiguration();
+
+    public void SaveConfiguration() => ConfigurationStore.Save(this.Configuration, _ConfigurationFile);
 
     public void LoadConfiguration() {
-      this._ClearConfiguration();
-      this.MergeConfiguration();
+      this._ClearCheckers();
+      this.Configuration = ConfigurationStore.Load(_ConfigurationFile, _LegacyConfigurationFile);
+      this._CreateCheckers();
+    }
+
+    /// <summary>
+    /// Applies a new configuration: persists it and re-creates the folder checkers.
+    /// </summary>
+    public void ApplyConfiguration(ToolboxConfiguration configuration) {
+      if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+
+      this._ClearCheckers();
+      this.Configuration = configuration;
+      this.SaveConfiguration();
+      this._CreateCheckers();
+    }
+
+    public WatchedFolderConfiguration GetFolderConfiguration(FolderIntegrityChecker checker) {
+      lock (this._integrityCheckers)
+        return this._folderConfigurations.TryGetValue(checker, out var result) ? result : null;
     }
 
     public void RebuildDatabases() => this._ExecuteOnAllCheckers(c => c.RebuildDatabase());
@@ -48,37 +67,36 @@ namespace Filesystem_Toolbox.Core {
 
     public void AcceptChange(FolderIntegrityChecker checker, FileInfo file) => checker.UpdateFile(file);
 
-    public void RunChecks(Action<FolderIntegrityChecker, FileInfo, string, string> onChecksumFailed, Action<FolderIntegrityChecker, FileInfo, string, Exception> onException) 
+    public void RunChecks(Action<FolderIntegrityChecker, FileInfo, string, string> onChecksumFailed, Action<FolderIntegrityChecker, FileInfo, string, Exception> onException)
       => this._ExecuteOnAllCheckers(c => c.VerifyIntegrity((f, o, n) => onChecksumFailed(c, f, o, n), (f, o, e) => onException(c, f, o, e)))
       ;
 
-    public void MergeConfiguration() {
-      var lines = _IntegrityConfigurationFile.ReadAllLinesOrDefault();
-      if (lines.IsNullOrEmpty())
-        return;
-
-      foreach (var line in lines) {
-        if (line.IsNullOrWhiteSpace())
+    private void _CreateCheckers() {
+      foreach (var folder in this.Configuration.Folders) {
+        if (folder.Path.IsNullOrWhiteSpace())
           continue;
 
-        var rootDirectory = new DirectoryInfo(line);
+        var rootDirectory = new DirectoryInfo(folder.Path);
         if (rootDirectory.NotExists())
           continue;
 
         var checker = FolderIntegrityChecker.Create(rootDirectory);
-        lock (this._integrityCheckers)
+        lock (this._integrityCheckers) {
           this._integrityCheckers.Add(checker);
+          this._folderConfigurations.Add(checker, folder);
+        }
 
         checker.Enabled = true;
       }
     }
 
-    private void _ClearConfiguration() {
+    private void _ClearCheckers() {
       FolderIntegrityChecker[] integrityCheckers;
 
       lock (this._integrityCheckers) {
         integrityCheckers = this._integrityCheckers.ToArray();
         this._integrityCheckers.Clear();
+        this._folderConfigurations.Clear();
       }
 
       foreach (var checker in integrityCheckers)
@@ -94,7 +112,7 @@ namespace Filesystem_Toolbox.Core {
       if (Interlocked.CompareExchange(ref this._isDisposed, 1, 0) != 0)
         return;
 
-      this._ClearConfiguration();
+      this._ClearCheckers();
     }
 
     public void Dispose() {
