@@ -159,6 +159,41 @@ namespace Filesystem_Toolbox.Core {
       }
     });
 
+    /// <summary>Whether the folder's volume supports hard links (NTFS only).</summary>
+    public static bool SupportsHardLinks(DirectoryInfo directory) {
+      try {
+        return string.Equals(new DriveInfo(directory.FullName).DriveFormat, "NTFS", StringComparison.OrdinalIgnoreCase);
+      } catch (ArgumentException) {
+        return false;
+      } catch (IOException) {
+        return false;
+      }
+    }
+
+    /// <summary>
+    /// Merges duplicate files of a watched folder into hard links (NTFS only, opt-in per folder).
+    /// New links get the read-only attribute by default - NTFS hard links are not copy-on-write.
+    /// </summary>
+    public Dedup.DedupReport RunDedup(FolderIntegrityChecker checker, bool dryRun = false, Action<string> log = null) {
+      var context = this._FindContext(checker);
+      if (context == null || !context.Configuration.DedupEnabled)
+        return null;
+
+      var root = checker.RootDirectory;
+      if (!SupportsHardLinks(root))
+        return null;
+
+      var options = new Dedup.DedupOptions {
+        ShowInfoOnly = dryRun,
+        DirectoryFilter = d => !(
+          string.Equals(d.Name, FolderIntegrityChecker.PROTECTED_FOLDER_NAME, StringComparison.OrdinalIgnoreCase)
+          && string.Equals(d.Parent?.FullName, root.FullName, StringComparison.OrdinalIgnoreCase)
+        ),
+      };
+
+      return Dedup.DuplicateFileMerger.ProcessFolders(new[] { root }, options, log);
+    }
+
     /// <summary>Runs the preventive flash refresh on every folder that has it enabled.</summary>
     public RefreshReport RunRefresh(CancellationToken token = default) {
       var total = new RefreshReport();
