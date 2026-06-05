@@ -42,6 +42,7 @@
       this.tsmiRunDedup = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunRefresh = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunBackup = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiStatistics = new System.Windows.Forms.ToolStripMenuItem();
       this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -154,6 +155,7 @@
             this.tsmiRunDedup,
             this.tsmiRunRefresh,
             this.tsmiRunBackup,
+            this.tsmiStatistics,
             tsmiExitApplication});
       this.cmsTrayMenu.Name = "cmsTrayMenu";
       this.cmsTrayMenu.Size = new System.Drawing.Size(180, 158);
@@ -185,6 +187,13 @@
       this.tsmiRunBackup.Size = new System.Drawing.Size(179, 22);
       this.tsmiRunBackup.Text = "Backup now";
       this.tsmiRunBackup.Click += new System.EventHandler(this.tsmiRunBackup_Click);
+      //
+      // tsmiStatistics
+      //
+      this.tsmiStatistics.Name = "tsmiStatistics";
+      this.tsmiStatistics.Size = new System.Drawing.Size(179, 22);
+      this.tsmiStatistics.Text = "Statistics...";
+      this.tsmiStatistics.Click += new System.EventHandler(this.tsmiStatistics_Click);
       // 
       // tsmiRebuildDatabase
       // 
@@ -247,6 +256,7 @@
     private System.Windows.Forms.ToolStripMenuItem tsmiRunDedup;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunRefresh;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunBackup;
+    private System.Windows.Forms.ToolStripMenuItem tsmiStatistics;
   }
 }
 

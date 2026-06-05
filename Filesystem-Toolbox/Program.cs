@@ -28,11 +28,10 @@ namespace Filesystem_Toolbox {
         using (var logic = new ToolboxService()) {
           logic.LoadConfiguration();
 
-          using (var mainForm = new MainForm(logic))
-          using (var notificationIcon = new NotifyIcon {
-            Icon = mainForm.Icon,
-            Text = mainForm.Text,
-          }) {
+          using (var notificationIcon = new NotifyIcon())
+          using (var mainForm = new MainForm(logic, new NotificationService(notificationIcon))) {
+            notificationIcon.Icon = mainForm.Icon;
+            notificationIcon.Text = mainForm.Text;
 
             // ReSharper disable once AccessToDisposedClosure
             notificationIcon.DoubleClick += (_, __) => mainForm.Show();

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
@@ -111,17 +112,45 @@ namespace Filesystem_Toolbox {
     }
 
     private readonly ToolboxService _logic;
+    private readonly INotifier _notifier;
     private readonly System.Threading.Timer _schedulerTimer;
     private static readonly TimeSpan _SCHEDULER_POLL = TimeSpan.FromMinutes(1);
 
-    internal MainForm(ToolboxService logic = null) {
+    internal MainForm(ToolboxService logic = null, INotifier notifier = null) {
       this._logic = logic;
+      this._notifier = notifier;
       this.InitializeComponent();
       this.SetFormTitle();
 
       this.dgvProblems.DataSource = this._entries;
       this._schedulerTimer = new System.Threading.Timer(this._SchedulerTick);
       this._schedulerTimer.Change(TimeSpan.FromSeconds(5), _SCHEDULER_POLL);
+
+      if (logic != null) {
+        logic.DeviceDegraded += root => this._Notify(root, n => n.Warning("Device degrading", $"{root} exceeded its monthly error budget - check the statistics."));
+        logic.DatabaseHealed += (root, result) => {
+          switch (result) {
+            case Core.Integrity.DbHealResult.Repaired:
+              this._Notify(root.FullName, n => n.Warning("Database repaired", $"The checksum database of {root.FullName} had rotted and was healed from its parity."));
+              break;
+
+            case Core.Integrity.DbHealResult.Unrepairable:
+              this._Notify(root.FullName, n => n.Error("Database damaged", $"The checksum database of {root.FullName} is damaged beyond repair - a rebuild is advised."));
+              break;
+          }
+        };
+      }
+    }
+
+    /// <summary>Routes a toast through the per-root ToastNotifications switch.</summary>
+    private void _Notify(string rootPath, Action<INotifier> send) {
+      if (this._notifier == null)
+        return;
+
+      if (rootPath != null && this._logic?.Resolver.Resolve(rootPath).ToastNotifications == false)
+        return;
+
+      send(this._notifier);
     }
 
     /// <summary>
@@ -194,6 +223,7 @@ namespace Filesystem_Toolbox {
     /// </summary>
     private void _ProcessVerificationResult(FolderIntegrityChecker checker, VerificationResult result) {
       var configuration = this._logic?.GetEffectiveSettings(checker);
+      var rootPath = checker.RootDirectory.FullName;
 
       switch (result.Status) {
         case VerificationStatus.ParityStale:
@@ -207,23 +237,119 @@ namespace Filesystem_Toolbox {
         case VerificationStatus.BitRot:
         case VerificationStatus.Missing:
         case VerificationStatus.Error:
+          var autoRepairAttempted = false;
           if (configuration?.AutoRepair == true && this._logic?.CanRepair(checker) == true) {
+            autoRepairAttempted = true;
             var outcome = this._logic.Repair(checker, result.File);
             if (outcome.Result is RepairResult.Repaired or RepairResult.RepairedFromBackup) {
+
+              // a defect happened to the medium even though it was healed - warn, per the workflow
+              this._Notify(rootPath, n => n.Warning("Repaired", $"{result.File.Name} had {result.Status} and was repaired automatically."));
               this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromRepair(checker, outcome)));
               return;
             }
           }
 
-          // still broken - notify the configured command, then show it
+          // still broken - notify the configured command, toast, and offer choices when repair already failed
           if (!string.IsNullOrWhiteSpace(configuration?.OnCorruptionCommand))
             this._logic?.RunOnCorruptionCommand(checker, result.File);
+
+          if (autoRepairAttempted) {
+            this._Notify(rootPath, n => n.Error("Unrepairable", $"{result.File.Name} could not be restored."));
+            this._EnqueueUnrepairable(checker, result.File);
+          } else
+            this._Notify(rootPath, n => n.Warning("Integrity problem", $"{result.File.Name}: {result.Status}"));
 
           break;
       }
 
       this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromResult(checker, result)));
     }
+
+    #region unrepairable dialog queue
+
+    private readonly Queue<(FolderIntegrityChecker Checker, FileInfo File)> _unrepairableQueue = new Queue<(FolderIntegrityChecker, FileInfo)>();
+    private bool _dialogShowing;
+    private UnrepairableChoice? _applyToAllChoice;
+
+    private void _EnqueueUnrepairable(FolderIntegrityChecker checker, FileInfo file) => this.SafelyInvoke(() => {
+      this._unrepairableQueue.Enqueue((checker, file));
+      this._PumpUnrepairable();
+    });
+
+    /// <summary>Shows queued dialogs one at a time (UI thread); "apply to all" short-circuits the rest.</summary>
+    private void _PumpUnrepairable() {
+      if (this._dialogShowing)
+        return;
+
+      while (this._unrepairableQueue.Count > 0) {
+        var (checker, file) = this._unrepairableQueue.Dequeue();
+
+        var choice = this._applyToAllChoice;
+        if (choice == null) {
+          this._dialogShowing = true;
+          try {
+            using (var dialog = new UnrepairableFileForm(file, this._logic?.CanRestoreFromBackup(checker) == true)) {
+              dialog.ShowDialog(this);
+              choice = dialog.Choice;
+              if (dialog.ApplyToAll)
+                this._applyToAllChoice = choice;
+            }
+          } finally {
+            this._dialogShowing = false;
+          }
+        }
+
+        this._ApplyUnrepairableChoice(checker, file, choice.Value);
+      }
+
+      this._applyToAllChoice = null; // each batch asks anew
+    }
+
+    private void _ApplyUnrepairableChoice(FolderIntegrityChecker checker, FileInfo file, UnrepairableChoice choice) {
+      try {
+        switch (choice) {
+          case UnrepairableChoice.RestoreFromBackup:
+            if (this._logic?.RestoreFromBackup(checker, file) == true)
+              this._RemoveEntriesForFile(file);
+            else
+              this._Notify(checker.RootDirectory.FullName, n => n.Error("Restore failed", $"No backup snapshot holds the recorded content of {file.Name}."));
+
+            break;
+
+          case UnrepairableChoice.Rename: {
+            var originalPath = file.FullName;
+            file.Refresh();
+            if (file.Exists) {
+              file.Attributes &= ~FileAttributes.ReadOnly;
+              file.MoveTo(originalPath + ".corrupt");
+            }
+
+            var original = new FileInfo(originalPath);
+            checker.UpdateFile(original); // gone from its old name -> the entry is dropped
+            this._RemoveEntriesForFile(original);
+            break;
+          }
+
+          case UnrepairableChoice.Delete:
+            file.Refresh();
+            if (file.Exists) {
+              file.Attributes &= ~FileAttributes.ReadOnly;
+              file.Delete();
+            }
+
+            checker.UpdateFile(file);
+            this._RemoveEntriesForFile(file);
+            break;
+        }
+      } catch (IOException) {
+        ;
+      } catch (UnauthorizedAccessException) {
+        ;
+      }
+    }
+
+    #endregion
 
     private void MainForm_FormClosing(object sender, FormClosingEventArgs e) {
       if (e.CloseReason != CloseReason.UserClosing)
@@ -319,14 +445,21 @@ namespace Filesystem_Toolbox {
                 this._RemoveEntriesForFile(item.File);
                 break;
 
-              default:
+              case RepairResult.ModifiedNotRepaired:
                 this.SafelyInvoke(() => MessageBox.Show(
                   this,
-                  $"{item.File.Name}: {outcome.Result}{(outcome.Error == null ? string.Empty : $" - {outcome.Error.Message}")}",
+                  $"{item.File.Name} was intentionally edited - accept the change instead of repairing.",
                   "Repair",
                   MessageBoxButtons.OK,
-                  MessageBoxIcon.Warning
+                  MessageBoxIcon.Information
                 ));
+                break;
+
+              default:
+
+                // repair failed - error toast and the what-now dialog, as configured
+                this._Notify(item.Checker.RootDirectory.FullName, n => n.Error("Unrepairable", $"{item.File.Name} could not be restored."));
+                this._EnqueueUnrepairable(item.Checker, item.File);
                 break;
             }
           }
@@ -431,6 +564,14 @@ namespace Filesystem_Toolbox {
         this._currentStatus = WindowStatus.Empty;
       }
     });
+
+    private void tsmiStatistics_Click(object sender, EventArgs e) {
+      if (this._logic == null)
+        return;
+
+      using (var dialog = new StatisticsForm(this._logic))
+        dialog.ShowDialog(this);
+    }
 
     private void cmsItems_Opening(object sender, CancelEventArgs e) {
       var selected = this.dgvProblems.GetSelectedItems<DgvEntry>().ToArray();
