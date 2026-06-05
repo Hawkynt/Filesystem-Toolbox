@@ -55,7 +55,7 @@ namespace Filesystem_Toolbox.Core.Integrity {
       this.Enabled = false;
       this._fileSystemWatcher.Dispose();
       this._taskQueue.Dispose();
-      this.SaveDatabase();
+      this._TrySaveDatabase();
     }
 
     public void Dispose() {
@@ -71,7 +71,25 @@ namespace Filesystem_Toolbox.Core.Integrity {
 
     #region event handlers
 
-    private void _Scheduler_OnExecute() => this.SaveDatabase();
+    private void _Scheduler_OnExecute() => this._TrySaveDatabase();
+
+    /// <summary>
+    /// Saves the database, swallowing I/O errors - the root (e.g. an unplugged USB stick)
+    /// may have vanished since the save was scheduled, and a deferred save must never
+    /// take down the process from a timer thread.
+    /// </summary>
+    private void _TrySaveDatabase() {
+      if (this.IsDisposed && this._database.IsEmpty)
+        return;
+
+      try {
+        this.SaveDatabase();
+      } catch (IOException) {
+        ;
+      } catch (UnauthorizedAccessException) {
+        ;
+      }
+    }
 
     private void _FileSystemWatcher_OnRenamed(object _, RenamedEventArgs e) {
       var newFile = new FileInfo(e.FullPath);

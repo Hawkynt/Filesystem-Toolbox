@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Filesystem-Toolbox.Core/Filesystem-Toolbox.Core.csproj" />
+  <Project Path="Filesystem-Toolbox.Tests/Filesystem-Toolbox.Tests.csproj" />
+  <Project Path="Filesystem-Toolbox/Filesystem-Toolbox.csproj" />
+</Solution>

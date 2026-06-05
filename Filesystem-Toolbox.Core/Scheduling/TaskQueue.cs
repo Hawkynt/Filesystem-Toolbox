@@ -123,14 +123,14 @@ namespace Filesystem_Toolbox.Core.Scheduling {
           return;
         }
 
-        if (this.RequeueOnException) {
-          try {
-            currentItem.Execute();
-          } catch (Exception) {
-            this._Enqueue(currentItem);
-          }
-        } else
+        try {
           currentItem.Execute();
+        } catch (Exception) {
+
+          // a failing task must never kill the worker, otherwise the queue is dead forever
+          if (this.RequeueOnException)
+            this._Enqueue(currentItem);
+        }
       }
     }
 

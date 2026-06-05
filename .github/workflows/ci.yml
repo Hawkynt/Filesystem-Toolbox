@@ -29,4 +29,4 @@ jobs:
       - name: Stamp per-package versions
         shell: bash
         run: perl .github/workflows/scripts/version.pl --stamp
-      - run: dotnet build Filesystem-Toolbox.sln --configuration Release
+      - run: dotnet build Filesystem-Toolbox.slnx --configuration Release
