@@ -123,7 +123,30 @@ namespace Filesystem_Toolbox.Core.Integrity {
 
     #endregion
 
-    private bool _IsIgnoredFile(FileInfo file) => file.FullName == this._databaseFile.FullName;
+    /// <summary>Name of the hidden per-root folder holding parity and refresh state - never watched or verified.</summary>
+    public const string PROTECTED_FOLDER_NAME = ".fst";
+
+    /// <summary>Raised after a file's database entry was added or updated (carries the new entry).</summary>
+    public event Action<FileInfo, ChecksumEntry> EntryUpdated;
+
+    /// <summary>Raised after a file's database entry was removed.</summary>
+    public event Action<FileInfo> EntryRemoved;
+
+    /// <summary>Raised after a rename moved an entry from one file to another.</summary>
+    public event Action<FileInfo, FileInfo> EntryRenamed;
+
+    private bool _IsIgnoredFile(FileInfo file)
+      => file.FullName == this._databaseFile.FullName
+      || this._IsInProtectedFolder(file.FullName)
+      ;
+
+    private bool _IsInProtectedFolder(string fullName)
+      => fullName.StartsWith(Path.Combine(this.RootDirectory.FullName, PROTECTED_FOLDER_NAME) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+    private bool _IsIgnoredDirectory(DirectoryInfo directory)
+      => string.Equals(directory.Name, PROTECTED_FOLDER_NAME, StringComparison.OrdinalIgnoreCase)
+      && string.Equals(directory.Parent?.FullName, this.RootDirectory.FullName, StringComparison.OrdinalIgnoreCase)
+      ;
 
     private void _EnqueueTask(Action task, FileInfo file, FileInfo alternateFile = null) {
       var key = this._GetKey(file);
@@ -135,17 +158,21 @@ namespace Filesystem_Toolbox.Core.Integrity {
     }
 
     private void _AddOrUpdateFile(FileInfo file) {
-      var value = _CalculateChecksum(file);
+      var entry = ChecksumEntry.FromFile(file);
+      var value = entry.ToString();
       this._database.AddOrUpdate(this._GetKey(file), _ => value, (_, __) => value);
 
       this._TriggerDatabaseSave();
+      this.EntryUpdated?.Invoke(file, entry);
     }
 
     private void _RemoveFile(FileInfo file) {
       string _;
-      this._database.TryRemove(this._GetKey(file), out _);
+      if (!this._database.TryRemove(this._GetKey(file), out _))
+        return;
 
       this._TriggerDatabaseSave();
+      this.EntryRemoved?.Invoke(file);
     }
 
     private void _ChangeFileName(FileInfo oldFile, FileInfo newFile) {
@@ -160,6 +187,7 @@ namespace Filesystem_Toolbox.Core.Integrity {
       );
 
       this._TriggerDatabaseSave();
+      this.EntryRenamed?.Invoke(oldFile, newFile);
     }
 
     private void _TriggerDatabaseSave() => this._scheduledTask.Schedule();
@@ -190,7 +218,9 @@ namespace Filesystem_Toolbox.Core.Integrity {
         foreach (var fsi in current.EnumerateFileSystemInfos()) {
           var dir = fsi as DirectoryInfo;
           if (dir != null) {
-            stack.Push(dir);
+            if (!this._IsIgnoredDirectory(dir))
+              stack.Push(dir);
+
             continue;
           }
 
@@ -257,7 +287,10 @@ namespace Filesystem_Toolbox.Core.Integrity {
           onException?.Invoke(file, expected, exception);
           continue;
         }
-        if (current == expected)
+        // semantic comparison: timestamps are metadata, only size + hash define content
+        if (ChecksumEntry.TryParse(expected, out var expectedEntry)
+            && ChecksumEntry.TryParse(current, out var currentEntry)
+            && currentEntry.ContentEquals(expectedEntry))
           continue;
 
         onInvalidChecksum(file, expected, current);
@@ -284,8 +317,20 @@ namespace Filesystem_Toolbox.Core.Integrity {
       return result;
     }
 
-    private static string _CalculateChecksum(FileInfo file) => file.Length + ":" + Convert.ToBase64String(file.ComputeSHA512Hash());
+    private static string _CalculateChecksum(FileInfo file) => ChecksumEntry.FromFile(file).ToString();
     private string _GetKey(FileInfo file) => file.RelativeTo(this.RootDirectory);
+
+    /// <summary>A point-in-time copy of the database: relative path to serialized <see cref="ChecksumEntry"/>.</summary>
+    public Dictionary<string, string> GetDatabaseSnapshot() => new Dictionary<string, string>(this._database);
+
+    /// <summary>Looks up the stored entry for a file, if any.</summary>
+    public bool TryGetEntry(FileInfo file, out ChecksumEntry entry) {
+      entry = default;
+      return this._database.TryGetValue(this._GetKey(file), out var value) && ChecksumEntry.TryParse(value, out entry);
+    }
+
+    /// <summary>Resolves a database key back to its absolute file.</summary>
+    public FileInfo GetFile(string databaseKey) => this.RootDirectory.File(databaseKey);
 
   }
 }
