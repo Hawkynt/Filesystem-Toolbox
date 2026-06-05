@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows.Forms;
+using Filesystem_Toolbox.Core;
 
 namespace Filesystem_Toolbox {
   static class Program {
@@ -15,7 +16,7 @@ namespace Filesystem_Toolbox {
         ;
       };
 
-      using (var logic = new MainLogic()) {
+      using (var logic = new ToolboxService()) {
         logic.LoadConfiguration();
         // TODO: allow configuring folders from within gui
         // TODO: allow configuring automatic checks from gui

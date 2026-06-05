@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Version>1.0.0</Version>
+    <RootNamespace>Filesystem_Toolbox</RootNamespace>
+    <AssemblyName>Filesystem-Toolbox</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <StartupObject>Filesystem_Toolbox.Program</StartupObject>
+    <AssemblyTitle>Filesystem-Toolbox</AssemblyTitle>
+    <Description>Tools to mess with the filesystem.</Description>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="System.Resources.Extensions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Filesystem-Toolbox.Core\Filesystem-Toolbox.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FrameworkExtensions.Corlib" Version="1.0.2.1347" />
+    <PackageReference Include="FrameworkExtensions.Backports" Version="1.0.0.1347" />
+    <PackageReference Include="FrameworkExtensions.System.Windows.Forms" Version="1.0.0.1347" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="CheckedFolders.lst">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

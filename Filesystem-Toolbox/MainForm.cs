@@ -5,8 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
-using Classes;
-using Filesystem_Toolbox.Properties;
+using Filesystem_Toolbox.Core;
+using Filesystem_Toolbox.Core.Integrity;
 
 namespace Filesystem_Toolbox {
   internal partial class MainForm : Form {
@@ -56,13 +56,13 @@ namespace Filesystem_Toolbox {
       private DgvEntry(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string currentChecksum) : this(checker, file) {
         this.Checksum = currentChecksum;
         this.OldChecksum = oldChecksum;
-        this.Image = Resources._16x16_Warning;
+        this.Image = Properties.Resources._16x16_Warning;
       }
 
       private DgvEntry(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, Exception exception) : this(checker, file) {
         this._exception = exception;
         this.OldChecksum = oldChecksum;
-        this.Image = Resources._16x16_Error;
+        this.Image = Properties.Resources._16x16_Error;
       }
 
       public static DgvEntry FromFailedChecksum(FolderIntegrityChecker checker, FileInfo file, string old, string current) => new DgvEntry(
@@ -105,17 +105,18 @@ namespace Filesystem_Toolbox {
       }
     }
 
-    private readonly MainLogic _logic;
+    private static readonly TimeSpan _CHECK_INTERVAL = TimeSpan.FromMinutes(10);
+    private readonly ToolboxService _logic;
     private readonly System.Threading.Timer _checkTimer;
 
-    internal MainForm(MainLogic logic = null) {
+    internal MainForm(ToolboxService logic = null) {
       this._logic = logic;
       this.InitializeComponent();
       this.SetFormTitle();
 
       this.dgvProblems.DataSource = this._entries;
       this._checkTimer = new System.Threading.Timer(this.tCheckTimer_Tick);
-      this._checkTimer.Change(Settings.Default.CheckInterval, Timeout.InfiniteTimeSpan);
+      this._checkTimer.Change(_CHECK_INTERVAL, Timeout.InfiniteTimeSpan);
     }
 
     internal void MarkFileChecksumFailed(FolderIntegrityChecker checker, FileInfo file, string oldChecksum, string newChecksum)
@@ -169,7 +170,7 @@ namespace Filesystem_Toolbox {
         if (isRunning != null && !isRunning.Value)
           this.VerificationRunning = false;
 
-        this._checkTimer.Change(Settings.Default.CheckInterval, Timeout.InfiniteTimeSpan);
+        this._checkTimer.Change(_CHECK_INTERVAL, Timeout.InfiniteTimeSpan);
       }
     }
 

@@ -2,8 +2,9 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 
-namespace Classes {
+namespace Filesystem_Toolbox.Core.Scheduling {
   public class TaskQueue : IDisposable {
 
     #region nested types
@@ -87,8 +88,7 @@ namespace Classes {
       if (Interlocked.CompareExchange(ref this._workerPresent, _TRUE, _FALSE) != _FALSE)
         return;
 
-      Action task = this._QueueWorker;
-      task.BeginInvoke(task.EndInvoke, null);
+      Task.Run(this._QueueWorker);
     }
 
     public void DequeueByTag<TTag>(TTag tag) => this._DequeueByTag(tag);

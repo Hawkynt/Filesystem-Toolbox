@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <Company>»SynthelicZ«</Company>
+    <Authors>Hawkynt</Authors>
+    <Product>Filesystem-Toolbox</Product>
+    <Copyright>Copyright © Hawkynt 2017-2026</Copyright>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+  </PropertyGroup>
+</Project>

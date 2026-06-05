@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net48;net8.0</TargetFrameworks>
+    <Version>1.0.0</Version>
+    <RootNamespace>Filesystem_Toolbox.Core</RootNamespace>
+    <AssemblyName>Filesystem-Toolbox.Core</AssemblyName>
+    <Description>UI-free domain library: folder integrity, parity-based bit-rot repair, refresh, dedup and configuration.</Description>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FrameworkExtensions.Corlib" Version="1.0.2.1347" />
+    <PackageReference Include="FrameworkExtensions.Backports" Version="1.0.0.1347" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Filesystem-Toolbox.Tests" />
+  </ItemGroup>
+</Project>

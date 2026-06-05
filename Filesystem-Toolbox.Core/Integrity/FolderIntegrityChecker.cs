@@ -5,8 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Filesystem_Toolbox.Core.Scheduling;
 
-namespace Classes {
+namespace Filesystem_Toolbox.Core.Integrity {
 
   public class FolderIntegrityChecker : IDisposable {
 
@@ -132,9 +133,6 @@ namespace Classes {
     private void _ChangeFileName(FileInfo oldFile, FileInfo newFile) {
       if (oldFile == null) throw new ArgumentNullException(nameof(oldFile));
       if (newFile == null) throw new ArgumentNullException(nameof(newFile));
-#if NETFX_4
-      System.Diagnostics.Contracts.Contract.EndContractBlock();
-#endif
 
       string oldChecksum;
       this._database.TryAdd(this._GetKey(newFile),

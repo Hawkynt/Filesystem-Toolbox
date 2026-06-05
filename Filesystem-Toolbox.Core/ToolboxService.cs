@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using Classes;
+using Filesystem_Toolbox.Core.Integrity;
 
-namespace Filesystem_Toolbox {
-  class MainLogic : IDisposable {
+namespace Filesystem_Toolbox.Core {
+  public class ToolboxService : IDisposable {
 
-    private static readonly DirectoryInfo _APPLICATION_FOLDER = new DirectoryInfo(Path.GetDirectoryName(AppDomain.CurrentDomain.SetupInformation.ConfigurationFile));
+    private static readonly DirectoryInfo _APPLICATION_FOLDER = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
     private const string _INTEGRITY_CONFIGURATION_FILE = @".\CheckedFolders.lst";
 
     private readonly List<FolderIntegrityChecker> _integrityCheckers = new List<FolderIntegrityChecker>();
@@ -31,9 +31,6 @@ namespace Filesystem_Toolbox {
 
     private void _ExecuteOnAllCheckers(Action<FolderIntegrityChecker> task) {
       if (task == null) throw new ArgumentNullException(nameof(task));
-#if NETFX_4
-      System.Diagnostics.Contracts.Contract.EndContractBlock();
-#endif
 
       var alreadyRun = new HashSet<FolderIntegrityChecker>();
       while (true) {
@@ -105,7 +102,7 @@ namespace Filesystem_Toolbox {
       GC.SuppressFinalize(this);
     }
 
-    ~MainLogic() {
+    ~ToolboxService() {
       this._ReleaseUnmanagedResources();
     }
 
