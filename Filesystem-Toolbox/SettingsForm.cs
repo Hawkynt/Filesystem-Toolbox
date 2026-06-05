@@ -25,18 +25,27 @@ namespace Filesystem_Toolbox {
       this.SetFormTitle();
       this.Text += @" - Settings";
 
-      this.nudCheckInterval.Value = Math.Max(this.nudCheckInterval.Minimum, Math.Min(this.nudCheckInterval.Maximum, this._configuration.CheckIntervalMinutes));
+      var globalSchedule = this._configuration.VerifySchedule;
+      var intervalMinutes = globalSchedule?.Kind == Core.Scheduling.ScheduleKind.Interval ? (int)globalSchedule.Value.Interval.TotalMinutes : 10;
+      this.nudCheckInterval.Value = Math.Max(this.nudCheckInterval.Minimum, Math.Min(this.nudCheckInterval.Maximum, intervalMinutes));
       this._ReloadFolderList(selectIndex: this._configuration.Folders.Count > 0 ? 0 : -1);
     }
 
     private static ToolboxConfiguration _Clone(ToolboxConfiguration source) => new ToolboxConfiguration {
       SchemaVersion = source.SchemaVersion,
-      CheckIntervalMinutes = source.CheckIntervalMinutes,
+      VerifySchedule = source.VerifySchedule,
       Folders = source.Folders.Select(f => new WatchedFolderConfiguration {
         Path = f.Path,
         ParityRedundancyPercent = f.ParityRedundancyPercent,
         AutoRepair = f.AutoRepair,
-        MirrorPath = f.MirrorPath,
+        BackupPath = f.BackupPath,
+        VerifySchedule = f.VerifySchedule,
+        BackupSchedule = f.BackupSchedule,
+        GfsKeepDaily = f.GfsKeepDaily,
+        GfsKeepWeekly = f.GfsKeepWeekly,
+        GfsKeepMonthly = f.GfsKeepMonthly,
+        DegradationWarningErrorsPerMonth = f.DegradationWarningErrorsPerMonth,
+        ToastNotifications = f.ToastNotifications,
         RefreshIntervalDays = f.RefreshIntervalDays,
         OnCorruptionCommand = f.OnCorruptionCommand,
         DedupEnabled = f.DedupEnabled,
@@ -69,10 +78,10 @@ namespace Filesystem_Toolbox {
       try {
         this.gbFolder.Enabled = folder != null;
         this.btnRemoveFolder.Enabled = folder != null;
-        this.nudParityPercent.Value = folder == null ? 25 : Math.Max(0, Math.Min(100, folder.ParityRedundancyPercent));
+        this.nudParityPercent.Value = folder == null ? 25 : Math.Max(0, Math.Min(100, folder.ParityRedundancyPercent ?? 25));
         this.cbAutoRepair.Checked = folder?.AutoRepair ?? false;
-        this.tbMirrorPath.Text = folder?.MirrorPath ?? string.Empty;
-        this.nudRefreshDays.Value = folder == null ? 180 : Math.Max(0, Math.Min(3650, folder.RefreshIntervalDays));
+        this.tbMirrorPath.Text = folder?.BackupPath ?? string.Empty;
+        this.nudRefreshDays.Value = folder == null ? 180 : Math.Max(0, Math.Min(3650, folder.RefreshIntervalDays ?? 180));
         this.tbCommand.Text = folder?.OnCorruptionCommand ?? string.Empty;
         this.cbDedup.Checked = folder?.DedupEnabled ?? false;
       } finally {
@@ -118,14 +127,14 @@ namespace Filesystem_Toolbox {
 
       folder.ParityRedundancyPercent = (int)this.nudParityPercent.Value;
       folder.AutoRepair = this.cbAutoRepair.Checked;
-      folder.MirrorPath = this.tbMirrorPath.Text.Trim().Length == 0 ? null : this.tbMirrorPath.Text.Trim();
+      folder.BackupPath = this.tbMirrorPath.Text.Trim().Length == 0 ? null : this.tbMirrorPath.Text.Trim();
       folder.RefreshIntervalDays = (int)this.nudRefreshDays.Value;
       folder.OnCorruptionCommand = this.tbCommand.Text.Trim().Length == 0 ? null : this.tbCommand.Text.Trim();
       folder.DedupEnabled = this.cbDedup.Checked;
     }
 
     private void btnOk_Click(object sender, EventArgs e) {
-      this._configuration.CheckIntervalMinutes = (int)this.nudCheckInterval.Value;
+      this._configuration.VerifySchedule = Core.Scheduling.ScheduleSpec.Every(TimeSpan.FromMinutes((int)this.nudCheckInterval.Value));
       this.DialogResult = DialogResult.OK;
       this.Close();
     }

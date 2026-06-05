@@ -113,7 +113,12 @@ namespace Filesystem_Toolbox {
     private readonly ToolboxService _logic;
     private readonly System.Threading.Timer _checkTimer;
 
-    private TimeSpan _CheckInterval => TimeSpan.FromMinutes(this._logic?.Configuration?.CheckIntervalMinutes ?? 10);
+    private TimeSpan _CheckInterval {
+      get {
+        var schedule = this._logic?.Configuration?.VerifySchedule;
+        return schedule?.Kind == Filesystem_Toolbox.Core.Scheduling.ScheduleKind.Interval ? schedule.Value.Interval : TimeSpan.FromMinutes(10);
+      }
+    }
 
     internal MainForm(ToolboxService logic = null) {
       this._logic = logic;
@@ -150,7 +155,7 @@ namespace Filesystem_Toolbox {
     /// broken, and surfaces the rest in the grid.
     /// </summary>
     private void _ProcessVerificationResult(FolderIntegrityChecker checker, VerificationResult result) {
-      var configuration = this._logic?.GetFolderConfiguration(checker);
+      var configuration = this._logic?.GetEffectiveSettings(checker);
 
       switch (result.Status) {
         case VerificationStatus.ParityStale:
@@ -397,7 +402,7 @@ namespace Filesystem_Toolbox {
       var logic = this._logic;
       this.tsmiRepair.Enabled = selected.Any(i => logic?.CanRepair(i.Checker) == true);
       this.tsmiRestoreFromMirror.Enabled = selected.Any(i => logic?.HasMirror(i.Checker) == true);
-      this.tsmiRunCommand.Enabled = selected.Any(i => !string.IsNullOrWhiteSpace(logic?.GetFolderConfiguration(i.Checker)?.OnCorruptionCommand));
+      this.tsmiRunCommand.Enabled = selected.Any(i => !string.IsNullOrWhiteSpace(logic?.GetEffectiveSettings(i.Checker)?.OnCorruptionCommand));
     }
 
   }

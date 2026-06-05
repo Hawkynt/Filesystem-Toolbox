@@ -17,19 +17,20 @@ namespace Filesystem_Toolbox.Core.Redundancy {
     private const string _PARITY_FOLDER_NAME = "parity";
     private const string _PARITY_EXTENSION = ".par";
 
-    private readonly ParityGeometry _geometry;
+    private readonly Func<FileInfo, int> _redundancyPercentFor;
 
     public DirectoryInfo Root { get; }
     public DirectoryInfo ParityRoot { get; }
 
-    public ParityStore(DirectoryInfo root, int redundancyPercent) {
+    /// <summary>Per-file redundancy: settings may differ along the folder tree, and the parity
+    /// file format self-describes its geometry, so every file can have its own.</summary>
+    public ParityStore(DirectoryInfo root, Func<FileInfo, int> redundancyPercentFor) {
       this.Root = root ?? throw new ArgumentNullException(nameof(root));
-      this._geometry = ParityGeometry.FromRedundancyPercent(redundancyPercent);
+      this._redundancyPercentFor = redundancyPercentFor ?? throw new ArgumentNullException(nameof(redundancyPercentFor));
       this.ParityRoot = new DirectoryInfo(Path.Combine(root.FullName, FolderIntegrityChecker.PROTECTED_FOLDER_NAME, _PARITY_FOLDER_NAME));
     }
 
-    /// <summary>How many damaged 64 KiB regions per MiB stripe are repairable with this store's settings.</summary>
-    public int ParityShardsPerStripe => this._geometry.ParityShardCount;
+    public ParityStore(DirectoryInfo root, int redundancyPercent) : this(root, _ => redundancyPercent) { }
 
     public FileInfo GetParityFile(FileInfo protectedFile) {
       if (protectedFile == null) throw new ArgumentNullException(nameof(protectedFile));
@@ -46,12 +47,20 @@ namespace Filesystem_Toolbox.Core.Redundancy {
 
     /// <summary>
     /// (Re)builds the parity for a file and returns the SHA-512 the parity is now bound to.
+    /// A resolved redundancy of zero disables parity for the file (existing parity is removed)
+    /// and yields <c>null</c>.
     /// </summary>
     public byte[] BuildParity(FileInfo protectedFile, CancellationToken token = default) {
+      var percent = this._redundancyPercentFor(protectedFile);
+      if (percent <= 0) {
+        this.DeleteParity(protectedFile);
+        return null;
+      }
+
       var parityFile = this.GetParityFile(protectedFile);
       this._EnsureStoreDirectory(parityFile.Directory);
 
-      var writer = new ParityFileWriter(this._geometry);
+      var writer = new ParityFileWriter(ParityGeometry.FromRedundancyPercent(percent));
       return writer.Write(protectedFile, parityFile, token);
     }
 
@@ -105,7 +114,6 @@ namespace Filesystem_Toolbox.Core.Redundancy {
 
     internal ParityFileReader OpenParity(FileInfo protectedFile) => ParityFileReader.Open(this.GetParityFile(protectedFile));
 
-    internal ParityGeometry Geometry => this._geometry;
 
     private void _EnsureStoreDirectory(DirectoryInfo parityDirectory) {
       var protectedFolder = new DirectoryInfo(Path.Combine(this.Root.FullName, FolderIntegrityChecker.PROTECTED_FOLDER_NAME));

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Filesystem_Toolbox.Core.Configuration;
+using Filesystem_Toolbox.Core.Scheduling;
 
 namespace Filesystem_Toolbox.Tests.Unit;
 
@@ -30,25 +31,32 @@ public class ConfigurationStoreTests {
 
     Assert.Multiple(() => {
       Assert.That(result.SchemaVersion, Is.EqualTo(ToolboxConfiguration.CURRENT_SCHEMA_VERSION));
-      Assert.That(result.CheckIntervalMinutes, Is.EqualTo(10));
+      Assert.That(result.VerifySchedule, Is.Null, "no explicit global schedule - hard default applies downstream");
       Assert.That(result.Folders, Is.Empty);
     });
   }
 
   [Test]
-  public void Given_SavedConfiguration_When_Loading_Then_AllValuesRoundTrip() {
+  public void Given_SavedV2Configuration_When_Loading_Then_AllValuesRoundTrip() {
     var original = new ToolboxConfiguration {
-      CheckIntervalMinutes = 42,
+      VerifySchedule = ScheduleSpec.Parse("daily 03:30"),
       Folders = {
         new() {
           Path = @"C:\Watched",
           ParityRedundancyPercent = 50,
           AutoRepair = true,
-          MirrorPath = @"D:\Mirror",
+          BackupPath = @"D:\Backups",
+          BackupSchedule = ScheduleSpec.Parse("weekly Sun 02:00"),
           RefreshIntervalDays = 90,
           OnCorruptionCommand = "notify.exe {file} {folder}",
           DedupEnabled = true,
+          GfsKeepDaily = 14,
+          GfsKeepWeekly = 8,
+          GfsKeepMonthly = 24,
+          DegradationWarningErrorsPerMonth = 3,
+          ToastNotifications = false,
         },
+        new() { Path = @"C:\Watched\Sub", ParityRedundancyPercent = 75 }, // partial override entry
       },
     };
 
@@ -56,39 +64,87 @@ public class ConfigurationStoreTests {
     var result = ConfigurationStore.Load(this._JsonFile);
 
     Assert.Multiple(() => {
-      Assert.That(result.CheckIntervalMinutes, Is.EqualTo(42));
-      Assert.That(result.Folders, Has.Count.EqualTo(1));
-      Assert.That(result.Folders[0].Path, Is.EqualTo(@"C:\Watched"));
-      Assert.That(result.Folders[0].ParityRedundancyPercent, Is.EqualTo(50));
-      Assert.That(result.Folders[0].AutoRepair, Is.True);
-      Assert.That(result.Folders[0].MirrorPath, Is.EqualTo(@"D:\Mirror"));
-      Assert.That(result.Folders[0].RefreshIntervalDays, Is.EqualTo(90));
-      Assert.That(result.Folders[0].OnCorruptionCommand, Is.EqualTo("notify.exe {file} {folder}"));
-      Assert.That(result.Folders[0].DedupEnabled, Is.True);
+      Assert.That(result.VerifySchedule, Is.EqualTo(ScheduleSpec.Parse("daily 03:30")));
+      Assert.That(result.Folders, Has.Count.EqualTo(2));
+      var f = result.Folders[0];
+      Assert.That(f.Path, Is.EqualTo(@"C:\Watched"));
+      Assert.That(f.ParityRedundancyPercent, Is.EqualTo(50));
+      Assert.That(f.AutoRepair, Is.True);
+      Assert.That(f.BackupPath, Is.EqualTo(@"D:\Backups"));
+      Assert.That(f.BackupSchedule, Is.EqualTo(ScheduleSpec.Parse("weekly Sunday 02:00")));
+      Assert.That(f.RefreshIntervalDays, Is.EqualTo(90));
+      Assert.That(f.OnCorruptionCommand, Is.EqualTo("notify.exe {file} {folder}"));
+      Assert.That(f.DedupEnabled, Is.True);
+      Assert.That(f.GfsKeepDaily, Is.EqualTo(14));
+      Assert.That(f.GfsKeepWeekly, Is.EqualTo(8));
+      Assert.That(f.GfsKeepMonthly, Is.EqualTo(24));
+      Assert.That(f.DegradationWarningErrorsPerMonth, Is.EqualTo(3));
+      Assert.That(f.ToastNotifications, Is.False);
+      var partial = result.Folders[1];
+      Assert.That(partial.ParityRedundancyPercent, Is.EqualTo(75));
+      Assert.That(partial.AutoRepair, Is.Null, "unset fields stay null = inherit");
+      Assert.That(partial.VerifySchedule, Is.Null);
     });
   }
 
   [Test]
-  public void Given_LegacyListFile_When_Loading_Then_FoldersAreMigratedWithDefaultPolicies() {
+  public void Given_V1Configuration_When_Loading_Then_MigratedToExplicitV2() {
+    File.WriteAllText(this._JsonFile.FullName, """
+      {
+        "schemaVersion": 1,
+        "checkIntervalMinutes": 42,
+        "folders": [
+          {
+            "path": "C:\\Old",
+            "parityRedundancyPercent": 30,
+            "autoRepair": true,
+            "mirrorPath": "E:\\OldMirror",
+            "refreshIntervalDays": 60,
+            "onCorruptionCommand": "x.exe {file}",
+            "dedupEnabled": true
+          }
+        ]
+      }
+      """);
+
+    var result = ConfigurationStore.Load(this._JsonFile);
+
+    Assert.Multiple(() => {
+      Assert.That(result.SchemaVersion, Is.EqualTo(2));
+      Assert.That(result.VerifySchedule, Is.EqualTo(ScheduleSpec.Every(TimeSpan.FromMinutes(42))), "interval becomes the global schedule");
+      Assert.That(result.Folders, Has.Count.EqualTo(1));
+      var f = result.Folders[0];
+      Assert.That(f.ParityRedundancyPercent, Is.EqualTo(30), "v1 values were effective values and stay explicit");
+      Assert.That(f.AutoRepair, Is.True);
+      Assert.That(f.BackupPath, Is.EqualTo(@"E:\OldMirror"), "mirrorPath becomes backupPath");
+      Assert.That(f.RefreshIntervalDays, Is.EqualTo(60));
+      Assert.That(f.OnCorruptionCommand, Is.EqualTo("x.exe {file}"));
+      Assert.That(f.DedupEnabled, Is.True);
+    });
+  }
+
+  [Test]
+  public void Given_V1Configuration_When_Loading_Then_UpgradedOnDiskWithBackup() {
+    File.WriteAllText(this._JsonFile.FullName, """{ "schemaVersion": 1, "checkIntervalMinutes": 10, "folders": [] }""");
+
+    ConfigurationStore.Load(this._JsonFile);
+
+    Assert.Multiple(() => {
+      Assert.That(new FileInfo(this._JsonFile.FullName + ".v1.bak"), Does.Exist, "the original v1 file is preserved");
+      Assert.That(File.ReadAllText(this._JsonFile.FullName), Does.Contain("\"schemaVersion\": 2"));
+      Assert.That(ConfigurationStore.Load(this._JsonFile).SchemaVersion, Is.EqualTo(2), "second load needs no migration");
+    });
+  }
+
+  [Test]
+  public void Given_LegacyListFile_When_Loading_Then_FoldersAreMigratedAsInheritEverything() {
     File.WriteAllLines(this._LegacyFile.FullName, [@"C:\One", "", "   ", @"C:\Two  "]);
 
     var result = ConfigurationStore.Load(this._JsonFile, this._LegacyFile);
 
     Assert.Multiple(() => {
       Assert.That(result.Folders.Select(f => f.Path), Is.EqualTo(new[] { @"C:\One", @"C:\Two" }));
-      Assert.That(result.Folders, Has.All.Property(nameof(WatchedFolderConfiguration.ParityRedundancyPercent)).EqualTo(25));
-      Assert.That(result.Folders, Has.All.Property(nameof(WatchedFolderConfiguration.AutoRepair)).False);
-      Assert.That(result.Folders, Has.All.Property(nameof(WatchedFolderConfiguration.RefreshIntervalDays)).EqualTo(180));
-    });
-  }
-
-  [Test]
-  public void Given_LegacyListFile_When_Loading_Then_JsonIsWrittenAndLegacyRenamedToBak() {
-    File.WriteAllLines(this._LegacyFile.FullName, [@"C:\One"]);
-
-    ConfigurationStore.Load(this._JsonFile, this._LegacyFile);
-
-    Assert.Multiple(() => {
+      Assert.That(result.Folders, Has.All.Property(nameof(WatchedFolderConfiguration.ParityRedundancyPercent)).Null, "legacy folders inherit everything");
       Assert.That(this._JsonFile, Does.Exist);
       Assert.That(this._LegacyFile, Does.Not.Exist);
       Assert.That(new FileInfo(this._LegacyFile.FullName + ".bak"), Does.Exist);
@@ -97,28 +153,15 @@ public class ConfigurationStoreTests {
 
   [Test]
   public void Given_BothJsonAndLegacyFile_When_Loading_Then_JsonWinsAndLegacyStaysUntouched() {
-    ConfigurationStore.Save(new() { CheckIntervalMinutes = 99 }, this._JsonFile);
+    ConfigurationStore.Save(new() { VerifySchedule = ScheduleSpec.Parse("every 99m") }, this._JsonFile);
     File.WriteAllLines(this._LegacyFile.FullName, [@"C:\ShouldNotBeMigrated"]);
 
     var result = ConfigurationStore.Load(this._JsonFile, this._LegacyFile);
 
     Assert.Multiple(() => {
-      Assert.That(result.CheckIntervalMinutes, Is.EqualTo(99));
+      Assert.That(result.VerifySchedule, Is.EqualTo(ScheduleSpec.Every(TimeSpan.FromMinutes(99))));
       Assert.That(result.Folders, Is.Empty);
       Assert.That(this._LegacyFile, Does.Exist);
-    });
-  }
-
-  [Test]
-  public void Given_EmptyLegacyFile_When_Loading_Then_NoFoldersButMigrationStillHappens() {
-    File.WriteAllText(this._LegacyFile.FullName, string.Empty);
-
-    var result = ConfigurationStore.Load(this._JsonFile, this._LegacyFile);
-
-    Assert.Multiple(() => {
-      Assert.That(result.Folders, Is.Empty);
-      Assert.That(this._JsonFile, Does.Exist);
-      Assert.That(this._LegacyFile, Does.Not.Exist);
     });
   }
 
@@ -140,11 +183,23 @@ public class ConfigurationStoreTests {
 
   [Test]
   public void Given_UnknownJsonProperties_When_Loading_Then_TheyAreIgnored() {
-    File.WriteAllText(this._JsonFile.FullName, """{ "checkIntervalMinutes": 5, "futureSetting": true }""");
+    File.WriteAllText(this._JsonFile.FullName, """{ "schemaVersion": 2, "verifySchedule": "every 5m", "futureSetting": true }""");
 
     var result = ConfigurationStore.Load(this._JsonFile);
 
-    Assert.That(result.CheckIntervalMinutes, Is.EqualTo(5));
+    Assert.That(result.VerifySchedule, Is.EqualTo(ScheduleSpec.Every(TimeSpan.FromMinutes(5))));
+  }
+
+  [Test]
+  public void Given_NullFields_When_Saving_Then_TheyAreOmittedFromJson() {
+    ConfigurationStore.Save(new() { Folders = { new() { Path = @"C:\X" } } }, this._JsonFile);
+
+    var json = File.ReadAllText(this._JsonFile.FullName);
+    Assert.Multiple(() => {
+      Assert.That(json, Does.Contain("\"path\""));
+      Assert.That(json, Does.Not.Contain("parityRedundancyPercent"), "inherit fields are not persisted");
+      Assert.That(json, Does.Not.Contain("backupPath"));
+    });
   }
 
 }

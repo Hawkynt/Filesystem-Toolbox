@@ -21,30 +21,32 @@ namespace Filesystem_Toolbox.Core {
     private sealed class FolderContext : IDisposable {
 
       public FolderIntegrityChecker Checker { get; }
-      public WatchedFolderConfiguration Configuration { get; }
+
+      /// <summary>The settings resolved at the watch root (parity percent is additionally resolved per file).</summary>
+      public EffectiveSettings Effective { get; }
+
       public ParityStore ParityStore { get; }
       public MirrorService Mirror { get; }
       public RepairService Repair { get; }
       public RefreshService Refresh { get; }
       private readonly ParityMaintenanceQueue _maintenanceQueue;
 
-      public FolderContext(WatchedFolderConfiguration configuration, FolderIntegrityChecker checker) {
-        this.Configuration = configuration;
+      public FolderContext(FolderIntegrityChecker checker, EffectiveSettings effective, ConfigurationResolver resolver) {
         this.Checker = checker;
+        this.Effective = effective;
 
-        if (configuration.ParityRedundancyPercent > 0) {
-          this.ParityStore = new ParityStore(checker.RootDirectory, configuration.ParityRedundancyPercent);
-          this._maintenanceQueue = new ParityMaintenanceQueue(checker, this.ParityStore);
-        }
+        // the store always exists: deeper overrides may enable parity even when the root disables it,
+        // and a per-file resolved percent of zero simply skips/deletes that file's parity
+        this.ParityStore = new ParityStore(checker.RootDirectory, file => resolver.Resolve(file).ParityRedundancyPercent);
+        this._maintenanceQueue = new ParityMaintenanceQueue(checker, this.ParityStore);
 
-        if (!configuration.MirrorPath.IsNullOrWhiteSpace())
-          this.Mirror = new MirrorService(checker.RootDirectory, new DirectoryInfo(configuration.MirrorPath));
+        if (!effective.BackupPath.IsNullOrWhiteSpace())
+          this.Mirror = new MirrorService(checker.RootDirectory, new DirectoryInfo(effective.BackupPath));
 
-        if (this.ParityStore != null)
-          this.Repair = new RepairService(checker, this.ParityStore, this.Mirror);
+        this.Repair = new RepairService(checker, this.ParityStore, this.Mirror);
 
-        if (configuration.RefreshIntervalDays > 0)
-          this.Refresh = new RefreshService(checker, TimeSpan.FromDays(configuration.RefreshIntervalDays));
+        if (effective.RefreshIntervalDays > 0)
+          this.Refresh = new RefreshService(checker, TimeSpan.FromDays(effective.RefreshIntervalDays));
       }
 
       public void Dispose() {
@@ -67,6 +69,9 @@ namespace Filesystem_Toolbox.Core {
 
     public ToolboxConfiguration Configuration { get; private set; } = new ToolboxConfiguration();
 
+    /// <summary>Resolves effective settings for any path; rebuilt whenever the configuration changes.</summary>
+    public ConfigurationResolver Resolver { get; private set; } = ConfigurationResolver.For(new ToolboxConfiguration());
+
     public void SaveConfiguration() => ConfigurationStore.Save(this.Configuration, _ConfigurationFile);
 
     public void LoadConfiguration() {
@@ -85,8 +90,9 @@ namespace Filesystem_Toolbox.Core {
       this._CreateFolders();
     }
 
-    public WatchedFolderConfiguration GetFolderConfiguration(FolderIntegrityChecker checker)
-      => this._FindContext(checker)?.Configuration;
+    /// <summary>The settings effective at a checker's watch root.</summary>
+    public EffectiveSettings GetEffectiveSettings(FolderIntegrityChecker checker)
+      => this._FindContext(checker)?.Effective;
 
     public bool CanRepair(FolderIntegrityChecker checker) => this._FindContext(checker)?.Repair != null;
 
@@ -100,11 +106,22 @@ namespace Filesystem_Toolbox.Core {
     public void RunClassifiedChecks(Action<FolderIntegrityChecker, VerificationResult> onResult, CancellationToken token = default) {
       if (onResult == null) throw new ArgumentNullException(nameof(onResult));
 
-      this._ExecuteOnAllContexts(context => {
-        var verifier = new IntegrityVerifier(context.Checker, context.ParityStore);
-        foreach (var result in verifier.VerifyAll(token))
-          onResult(context.Checker, result);
-      });
+      this._ExecuteOnAllContexts(context => _VerifyContext(context, onResult, token));
+    }
+
+    /// <summary>Verifies a single watch root, reporting every non-Ok file with its classification.</summary>
+    public void RunClassifiedChecks(string rootPath, Action<FolderIntegrityChecker, VerificationResult> onResult, CancellationToken token = default) {
+      if (onResult == null) throw new ArgumentNullException(nameof(onResult));
+
+      var context = this._FindContextByRoot(rootPath);
+      if (context != null)
+        _VerifyContext(context, onResult, token);
+    }
+
+    private static void _VerifyContext(FolderContext context, Action<FolderIntegrityChecker, VerificationResult> onResult, CancellationToken token) {
+      var verifier = new IntegrityVerifier(context.Checker, context.ParityStore);
+      foreach (var result in verifier.VerifyAll(token))
+        onResult(context.Checker, result);
     }
 
     /// <summary>Legacy callback-style verification, kept for the existing UI wiring.</summary>
@@ -159,11 +176,11 @@ namespace Filesystem_Toolbox.Core {
       }
     });
 
-    /// <summary>Runs the folder's configured on-corruption command for one file, if any is set.</summary>
+    /// <summary>Runs the effective on-corruption command for one file, if any is configured along the chain.</summary>
     public bool RunOnCorruptionCommand(FolderIntegrityChecker checker, FileInfo file) {
-      var configuration = this.GetFolderConfiguration(checker);
-      return configuration != null
-        && Commands.OnCorruptionCommandRunner.Run(configuration.OnCorruptionCommand, file, checker.RootDirectory)
+      var settings = this.GetEffectiveSettings(checker);
+      return settings != null
+        && Commands.OnCorruptionCommandRunner.Run(settings.OnCorruptionCommand, file, checker.RootDirectory)
         ;
     }
 
@@ -184,7 +201,7 @@ namespace Filesystem_Toolbox.Core {
     /// </summary>
     public Dedup.DedupReport RunDedup(FolderIntegrityChecker checker, bool dryRun = false, Action<string> log = null) {
       var context = this._FindContext(checker);
-      if (context == null || !context.Configuration.DedupEnabled)
+      if (context == null || !context.Effective.DedupEnabled)
         return null;
 
       var root = checker.RootDirectory;
@@ -236,9 +253,21 @@ namespace Filesystem_Toolbox.Core {
       return total;
     }
 
+    /// <summary>Runs the preventive flash refresh on a single watch root.</summary>
+    public RefreshReport RunRefresh(string rootPath, CancellationToken token = default) {
+      var context = this._FindContextByRoot(rootPath);
+      return context?.Refresh?.RefreshDue(token) ?? new RefreshReport();
+    }
+
     private FolderContext _FindContext(FolderIntegrityChecker checker) {
       lock (this._folders)
         return this._folders.FirstOrDefault(c => ReferenceEquals(c.Checker, checker));
+    }
+
+    private FolderContext _FindContextByRoot(string rootPath) {
+      lock (this._folders)
+        return this._folders.FirstOrDefault(c => string.Equals(c.Checker.RootDirectory.FullName, Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)
+                                              || string.Equals(c.Checker.RootDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar), Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase));
     }
 
     private void _ExecuteOnAllCheckers(Action<FolderIntegrityChecker> task) => this._ExecuteOnAllContexts(c => task(c.Checker));
@@ -261,16 +290,15 @@ namespace Filesystem_Toolbox.Core {
     }
 
     private void _CreateFolders() {
-      foreach (var folder in this.Configuration.Folders) {
-        if (folder.Path.IsNullOrWhiteSpace())
-          continue;
+      this.Resolver = ConfigurationResolver.For(this.Configuration);
 
+      foreach (var folder in this.Resolver.WatchRoots) {
         var rootDirectory = new DirectoryInfo(folder.Path);
         if (rootDirectory.NotExists())
           continue;
 
         var checker = FolderIntegrityChecker.Create(rootDirectory);
-        var context = new FolderContext(folder, checker);
+        var context = new FolderContext(checker, this.Resolver.Resolve(rootDirectory), this.Resolver);
         lock (this._folders)
           this._folders.Add(context);
 
