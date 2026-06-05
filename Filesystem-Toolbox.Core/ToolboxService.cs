@@ -70,6 +70,15 @@ namespace Filesystem_Toolbox.Core {
     private readonly List<FolderContext> _folders = new List<FolderContext>();
     private readonly Scheduling.SchedulerService _scheduler = new Scheduling.SchedulerService(_APPLICATION_FOLDER.File(_SCHEDULER_STATE_FILE));
 
+    /// <summary>The append-only event history feeding the statistics.</summary>
+    public Statistics.EventLog Events { get; } = new Statistics.EventLog(_APPLICATION_FOLDER.File("events.jsonl"));
+
+    /// <summary>Raised when a root's monthly error count crosses its degradation threshold (once per day).</summary>
+    public event Action<string> DeviceDegraded;
+
+    /// <summary>Raised when a checksum database was found rotten while loading and a heal was attempted.</summary>
+    public event Action<DirectoryInfo, DbHealResult> DatabaseHealed;
+
     private static FileInfo _ConfigurationFile => _APPLICATION_FOLDER.File(_CONFIGURATION_FILE);
     private static FileInfo _LegacyConfigurationFile => _APPLICATION_FOLDER.File(_LEGACY_CONFIGURATION_FILE);
 
@@ -112,7 +121,7 @@ namespace Filesystem_Toolbox.Core {
     public void RunClassifiedChecks(Action<FolderIntegrityChecker, VerificationResult> onResult, CancellationToken token = default) {
       if (onResult == null) throw new ArgumentNullException(nameof(onResult));
 
-      this._ExecuteOnAllContexts(context => _VerifyContext(context, onResult, token));
+      this._ExecuteOnAllContexts(context => this._VerifyContext(context, onResult, token));
     }
 
     /// <summary>Verifies a single watch root, reporting every non-Ok file with its classification.</summary>
@@ -121,13 +130,39 @@ namespace Filesystem_Toolbox.Core {
 
       var context = this._FindContextByRoot(rootPath);
       if (context != null)
-        _VerifyContext(context, onResult, token);
+        this._VerifyContext(context, onResult, token);
     }
 
-    private static void _VerifyContext(FolderContext context, Action<FolderIntegrityChecker, VerificationResult> onResult, CancellationToken token) {
+    private void _VerifyContext(FolderContext context, Action<FolderIntegrityChecker, VerificationResult> onResult, CancellationToken token) {
+      var root = context.Checker.RootDirectory.FullName;
+      var problemCounts = new Dictionary<VerificationStatus, int>();
+
       var verifier = new IntegrityVerifier(context.Checker, context.ParityStore);
-      foreach (var result in verifier.VerifyAll(token))
+      foreach (var result in verifier.VerifyAll(token)) {
+        problemCounts.TryGetValue(result.Status, out var count);
+        problemCounts[result.Status] = count + 1;
+
+        if (result.Status == VerificationStatus.BitRot)
+          this.Events.Append(Statistics.EventRecord.Now(root, Statistics.EventType.BitRotFound, result.File.FullName));
+
         onResult(context.Checker, result);
+      }
+
+      var record = Statistics.EventRecord.Now(
+        root,
+        Statistics.EventType.VerifyRun,
+        detail: problemCounts.Count == 0 ? null : string.Join(";", problemCounts.Select(p => $"{p.Key}={p.Value}"))
+      );
+      record.FilesChecked = context.Checker.GetDatabaseSnapshot().Count;
+      record.Problems = problemCounts.Values.Sum();
+      this.Events.Append(record);
+
+      // degradation watch: warn once per day when the monthly error budget is blown
+      var statistics = new Statistics.StatisticsService(this.Events);
+      if (statistics.CrossedThresholdToday(root, context.Effective.DegradationWarningErrorsPerMonth)) {
+        this.Events.Append(Statistics.EventRecord.Now(root, Statistics.EventType.DeviceWarning));
+        this.DeviceDegraded?.Invoke(root);
+      }
     }
 
     /// <summary>Legacy callback-style verification, kept for the existing UI wiring.</summary>
@@ -135,13 +170,31 @@ namespace Filesystem_Toolbox.Core {
       => this._ExecuteOnAllCheckers(c => c.VerifyIntegrity((f, o, n) => onChecksumFailed(c, f, o, n), (f, o, e) => onException(c, f, o, e)))
       ;
 
-    /// <summary>Repairs one file using parity and/or mirror; honest about the outcome.</summary>
+    /// <summary>Repairs one file using parity and/or backup; honest about the outcome.</summary>
     public RepairOutcome Repair(FolderIntegrityChecker checker, FileInfo file, CancellationToken token = default) {
       var context = this._FindContext(checker);
       if (context?.Repair == null)
         return new RepairOutcome(file, RepairResult.ParityMissing);
 
-      return context.Repair.Repair(file, token);
+      var outcome = context.Repair.Repair(file, token);
+
+      var root = checker.RootDirectory.FullName;
+      switch (outcome.Result) {
+        case RepairResult.Repaired:
+          this.Events.Append(Statistics.EventRecord.Now(root, Statistics.EventType.Repaired, file.FullName));
+          break;
+
+        case RepairResult.RepairedFromBackup:
+          this.Events.Append(Statistics.EventRecord.Now(root, Statistics.EventType.RepairedFromBackup, file.FullName));
+          break;
+
+        case RepairResult.Unrepairable:
+        case RepairResult.ParityMissing:
+          this.Events.Append(Statistics.EventRecord.Now(root, Statistics.EventType.Unrepairable, file.FullName));
+          break;
+      }
+
+      return outcome;
     }
 
     /// <summary>Restores one file from the folder's backup snapshots (hash-verified, newest matching wins).</summary>
@@ -151,7 +204,11 @@ namespace Filesystem_Toolbox.Core {
         return false;
 
       try {
-        return context.Backup.Restore(file, entry.Hash);
+        var restored = context.Backup.Restore(file, entry.Hash);
+        if (restored)
+          this.Events.Append(Statistics.EventRecord.Now(checker.RootDirectory.FullName, Statistics.EventType.RepairedFromBackup, file.FullName));
+
+        return restored;
       } catch (IOException) {
         return false;
       } catch (UnauthorizedAccessException) {
@@ -160,15 +217,30 @@ namespace Filesystem_Toolbox.Core {
     }
 
     /// <summary>Creates a GFS snapshot of one watch root; null when no backup is configured.</summary>
-    public BackupReport RunBackup(string rootPath, CancellationToken token = default)
-      => this._FindContextByRoot(rootPath)?.Backup?.RunBackup(token);
+    public BackupReport RunBackup(string rootPath, CancellationToken token = default) {
+      var context = this._FindContextByRoot(rootPath);
+      var report = context?.Backup?.RunBackup(token);
+      if (report != null) {
+        var record = Statistics.EventRecord.Now(context.Checker.RootDirectory.FullName, Statistics.EventType.BackupRun, detail: report.SnapshotName);
+        record.FilesChecked = report.FilesConsidered;
+        record.Linked = report.Linked;
+        record.Copied = report.Copied;
+        this.Events.Append(record);
+      }
+
+      return report;
+    }
 
     /// <summary>Creates GFS snapshots of every folder with a backup target; null when none has one.</summary>
     public List<BackupReport> RunBackupAll(CancellationToken token = default) {
       var reports = new List<BackupReport>();
       this._ExecuteOnAllContexts(context => {
-        if (context.Backup != null)
-          reports.Add(context.Backup.RunBackup(token));
+        if (context.Backup == null)
+          return;
+
+        var report = this.RunBackup(context.Checker.RootDirectory.FullName, token);
+        if (report != null)
+          reports.Add(report);
       });
 
       return reports.Count > 0 ? reports : null;
@@ -242,6 +314,7 @@ namespace Filesystem_Toolbox.Core {
           return;
 
         var report = context.Refresh.RefreshDue(token);
+        this._RecordRefresh(context, report);
         total.Refreshed += report.Refreshed;
         total.SkippedNotDue += report.SkippedNotDue;
         total.SkippedDirty += report.SkippedDirty;
@@ -249,6 +322,15 @@ namespace Filesystem_Toolbox.Core {
       });
 
       return total;
+    }
+
+    private void _RecordRefresh(FolderContext context, RefreshReport report) {
+      if (report.Refreshed == 0)
+        return;
+
+      var record = Statistics.EventRecord.Now(context.Checker.RootDirectory.FullName, Statistics.EventType.Refreshed);
+      record.Count = report.Refreshed;
+      this.Events.Append(record);
     }
 
     /// <summary>Scheduled actions (verify/backup/refresh per root) that are due right now.</summary>
@@ -266,7 +348,19 @@ namespace Filesystem_Toolbox.Core {
     /// <summary>Runs the preventive flash refresh on a single watch root.</summary>
     public RefreshReport RunRefresh(string rootPath, CancellationToken token = default) {
       var context = this._FindContextByRoot(rootPath);
-      return context?.Refresh?.RefreshDue(token) ?? new RefreshReport();
+      if (context?.Refresh == null)
+        return new RefreshReport();
+
+      var report = context.Refresh.RefreshDue(token);
+      this._RecordRefresh(context, report);
+      return report;
+    }
+
+    private void _OnDatabaseHealed(DirectoryInfo root, DbHealResult result) {
+      if (result == DbHealResult.Repaired)
+        this.Events.Append(Statistics.EventRecord.Now(root.FullName, Statistics.EventType.DbRepaired));
+
+      this.DatabaseHealed?.Invoke(root, result);
     }
 
     private FolderContext _FindContext(FolderIntegrityChecker checker) {
@@ -307,7 +401,11 @@ namespace Filesystem_Toolbox.Core {
         if (rootDirectory.NotExists())
           continue;
 
-        var checker = FolderIntegrityChecker.Create(rootDirectory);
+        // subscribe BEFORE loading so a heal during the initial load is not missed
+        var checker = new FolderIntegrityChecker(rootDirectory);
+        checker.DatabaseHealed += this._OnDatabaseHealed;
+        checker.LoadDatabase();
+
         var context = new FolderContext(checker, this.Resolver.Resolve(rootDirectory), this.Resolver);
         lock (this._folders)
           this._folders.Add(context);
