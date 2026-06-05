@@ -14,10 +14,10 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-  # The app is a Windows WinExe (.NET Framework), so the build runs on windows only.
-  # The 8.0.x SDK drives MSBuild; the windows runner carries the net4x targeting packs.
+  # The app is a Windows WinExe (net48 + net8.0-windows), so the full build runs on windows.
+  # The 9.0.x SDK understands the .slnx solution format; the 8.0.x runtime executes the tests.
   build:
-    name: build (windows)
+    name: build + test (windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,8 +25,38 @@ jobs:
           fetch-depth: 0                       # version.pl counts commits per project
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            9.0.x
       - name: Stamp per-package versions
         shell: bash
         run: perl .github/workflows/scripts/version.pl --stamp
       - run: dotnet build Filesystem-Toolbox.slnx --configuration Release
+
+      # required tier: everything except wall-clock-sensitive performance tests
+      - name: Test with coverage (required)
+        run: dotnet test Filesystem-Toolbox.Tests/Filesystem-Toolbox.Tests.csproj -c Release --no-build --filter "TestCategory!=Performance" --settings coverage.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults --logger "console;verbosity=normal"
+
+      # advisory tier: timing assertions are flaky on shared runners and never block a merge
+      - name: Test performance (advisory)
+        continue-on-error: true
+        run: dotnet test Filesystem-Toolbox.Tests/Filesystem-Toolbox.Tests.csproj -c Release --no-build --filter "TestCategory=Performance" --logger "console;verbosity=normal"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: TestResults/**/coverage.cobertura.xml
+          if-no-files-found: ignore
+
+  # The Core library is OS-neutral; its pure-compute Unit tier also runs on Linux to keep
+  # path/IO assumptions honest. Integration/EndToEnd stay Windows-only (NTFS, attributes, links).
+  test-core:
+    name: test core units (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet test Filesystem-Toolbox.Tests/Filesystem-Toolbox.Tests.csproj -c Release -f net8.0 --filter "TestCategory=Unit" --logger "console;verbosity=normal"

@@ -17,48 +17,65 @@
 [![Nightly](https://img.shields.io/github/v/release/Hawkynt/Filesystem-Toolbox?include_prereleases=true&sort=date&label=nightly&color=FF9800)](https://github.com/Hawkynt/Filesystem-Toolbox/releases)
 [![Downloads](https://img.shields.io/github/downloads/Hawkynt/Filesystem-Toolbox/total)](https://github.com/Hawkynt/Filesystem-Toolbox/releases)
 
-> A Windows tray application that guards folders against silent file corruption (bit rot): it keeps a per-folder SHA-512 checksum database, tracks deliberate changes live via filesystem watchers so they don't raise false alarms, and periodically re-verifies every file — reporting the ones whose content changed without anyone touching them.
+> A Windows tray application that protects folders - especially on USB sticks and SD cards that silently "forget" data as their flash cells lose charge - by detecting bit rot through SHA-512 checksums, repairing it from locally stored Reed-Solomon parity (and optionally a mirror copy), and preventing it by periodically rewriting aging files to recharge the cells.
 
 ## Install
 
-Download the latest [release](https://github.com/Hawkynt/Filesystem-Toolbox/releases/latest) (or a [nightly](https://github.com/Hawkynt/Filesystem-Toolbox/releases)) and unpack it anywhere — no installer. Requires Windows with .NET Framework 4.6 or later.
+Download the latest [release](https://github.com/Hawkynt/Filesystem-Toolbox/releases/latest) (or a [nightly](https://github.com/Hawkynt/Filesystem-Toolbox/releases)) and unpack it anywhere - no installer. Requires Windows with .NET Framework 4.8 or later (a .NET 8 build is produced too).
 
 ## Usage
 
-1. Create or edit `CheckedFolders.lst` next to the executable — one absolute folder path per line.
-2. Start `Filesystem-Toolbox.exe`; it lives in the system tray (double-click the icon to open the main window).
-3. For each watched folder a hidden, NTFS-compressed `checksum.db` is kept in its root, storing file size + SHA-512 per file. Use *Rebuild database* from the tray menu to (re)create it initially.
-4. Every 10 minutes (the `CheckInterval` setting in `Filesystem-Toolbox.exe.config`) all folders are re-verified; files whose checksum no longer matches — and new files missing from the database — appear in the main window. *Verify folders* in the tray menu triggers a check on demand.
-5. Right-click a reported file and *accept* the difference if the change is legitimate; the stored checksum is updated.
+1. Start `Filesystem-Toolbox.exe`; it lives in the system tray (a second start just pops the window of the running instance).
+2. Open *Settings…* from the tray menu and add the folders to watch. Per folder you can configure:
+   - **Parity redundancy** (default 25 %): how much Reed-Solomon parity to keep - N % extra disk repairs up to N % damaged regions per file.
+   - **Auto-repair**: heal detected bit rot without asking.
+   - **Mirror folder**: a second location holding plain copies, used when parity cannot help (e.g. a file vanished entirely).
+   - **Refresh interval** (default 180 days, 0 = off): preventive rewrite of verified-good files.
+   - **On-corruption command**: external command with `{file}`/`{folder}` placeholders, run for files that stay broken.
+   - **Duplicate merging**: allow replacing identical files with hard links (NTFS only).
+3. Use *Rebuild* from the tray menu once to take the initial fingerprint of existing folders.
+4. Every check interval (default 10 minutes) all folders are verified. Each finding is **classified**:
 
-While the app is running, filesystem watchers keep the database in sync automatically, so deliberate edits, renames and deletions are absorbed without alarms — only unexpected content changes surface.
+   | Status | Meaning |
+   |---|---|
+   | `BitRot` | content changed although size and modification time did not - the medium lost data |
+   | `Modified` | content *and* timestamp changed - looks like an intentional edit |
+   | `New` | file exists but is not fingerprinted yet |
+   | `Missing` | fingerprinted file is gone |
+   | `Error` | the file could not be read at all |
+
+5. Right-click a finding: **Repair** (from parity, falls back to the mirror), **Restore from mirror**, **Accept change** (take the new content as the truth), or **Run command**. Intentional edits are never "repaired" backwards - accept them instead.
+
+While running, filesystem watchers keep the checksum database and the parity store current, so deliberate edits, renames and deletions never raise false alarms.
+
+### How the protection works
+
+- Every file's size, modification time and SHA-512 go into a hidden `checksum.db` in the watched root.
+- Parity lives in a hidden `<root>\.fst\parity\` tree (plain files - works on FAT32/exFAT sticks): per file a systematic Reed-Solomon code over GF(2⁸) with 64 KiB shards, 16 data + *m* parity shards per stripe (25 % → *m* = 4). Per-shard CRC-32C locates damaged regions so they count as *erasures*, giving the full *m*-shards-per-stripe repair capacity. Every repair is verified against the recorded SHA-512 before the file is atomically replaced - a wrong "fix" can never be shipped.
+- Parity is cryptographically bound to the file state it was built from; stale parity (file legitimately edited since) is detected and rebuilt, never applied.
+- **Limit:** with less than 100 % redundancy a *completely lost* file cannot be reconstructed from parity - that is what the mirror folder is for (mirror copies are themselves hash-verified before being restored).
+- **Refresh** rewrites verified-clean files in place (read → write → flush to device → restore timestamps) to recharge flash cells. Each refresh costs one program/erase cycle - the 180-day default means ~2 cycles/year, negligible against NAND endurance. Useful for passive media (USB sticks, SD cards); pointless for managed SSDs, leave it off there.
 
 ## Features
 
-- watches any number of folder trees, configured via `CheckedFolders.lst`
-- per-folder checksum database (size + SHA-512 per file), stored hidden/system and NTFS-compressed in the folder itself
-- live database maintenance through filesystem watchers (create / change / rename / delete), debounced and queued
-- periodic background verification with results in a sortable grid, including unrecorded new files
-- accept individual differences from the grid; rebuild a folder's database from the tray menu (with confirmation, progress shown)
-- tray-first UI: starts minimized to the notification area, double-click opens the window
-
-### Planned
-
-- configure watched folders and the check interval from the GUI instead of files
-- single-instance guard
-- user-definable action to run when broken files are found (per file and per batch)
-- duplicate finder that replaces copies with NTFS hard-links (setting the read-only attribute to dodge the missing copy-on-write semantics)
+- watches any number of folder trees with per-folder policies (`FilesystemToolbox.json`; a legacy `CheckedFolders.lst` is migrated automatically)
+- bit-rot **detection** that distinguishes silent corruption from intentional edits via the size/mtime/hash triple
+- bit-rot **repair** from local Reed-Solomon parity with configurable redundancy, hash-verified and atomic
+- mirror-folder fallback for whole-file restore, hash-gated against restoring rot
+- preventive flash **refresh** with persisted per-file timestamps
+- auto-repair mode per folder; on-corruption command hook per file
+- duplicate-to-hardlink merger (NTFS): size-bucketed, block-compared, new links read-only by default since NTFS hard links are not copy-on-write
+- single-instance tray app; sortable problem grid with status classification
 
 ## Building
 
-A .NET Framework 4.6 WinForms project — build on Windows:
-
 ```bash
-dotnet build Filesystem-Toolbox.sln --configuration Release
+dotnet build Filesystem-Toolbox.slnx -c Release
+dotnet test  Filesystem-Toolbox.Tests/Filesystem-Toolbox.Tests.csproj -c Release
 ```
 
-Note: the project compiles shared sources expected two levels above the project file (`..\..\Framework\*.cs`, `..\..\Libraries\ApplicationTitler.cs`) and imports `..\..\VersionSpecificSymbols.Common.prop`, so those need to be present in that layout for the build to succeed.
+The solution (slnx format, SDK ≥ 9) contains the WinForms app (`net48;net8.0-windows`), the UI-free domain library `Filesystem-Toolbox.Core` (`net48;net8.0`) and an NUnit test suite (`net8.0`) with Unit/Integration categories. `run-tests-with-coverage.bat`/`.sh` produces an HTML coverage report under `TestResults/CoverageReport/`.
 
 ## License
 
-Licensed under LGPL-3.0 — see [LICENSE](LICENSE).
+Licensed under LGPL-3.0 - see [LICENSE](LICENSE).
