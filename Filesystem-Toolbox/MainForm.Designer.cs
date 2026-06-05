@@ -41,6 +41,7 @@
       this.tsmiSettings = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunDedup = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunRefresh = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiSyncMirrors = new System.Windows.Forms.ToolStripMenuItem();
       this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -152,6 +153,7 @@
             this.tsmiVerifyFolders,
             this.tsmiRunDedup,
             this.tsmiRunRefresh,
+            this.tsmiSyncMirrors,
             tsmiExitApplication});
       this.cmsTrayMenu.Name = "cmsTrayMenu";
       this.cmsTrayMenu.Size = new System.Drawing.Size(180, 158);
@@ -176,6 +178,13 @@
       this.tsmiRunRefresh.Size = new System.Drawing.Size(179, 22);
       this.tsmiRunRefresh.Text = "Refresh media";
       this.tsmiRunRefresh.Click += new System.EventHandler(this.tsmiRunRefresh_Click);
+      //
+      // tsmiSyncMirrors
+      //
+      this.tsmiSyncMirrors.Name = "tsmiSyncMirrors";
+      this.tsmiSyncMirrors.Size = new System.Drawing.Size(179, 22);
+      this.tsmiSyncMirrors.Text = "Sync mirrors";
+      this.tsmiSyncMirrors.Click += new System.EventHandler(this.tsmiSyncMirrors_Click);
       // 
       // tsmiRebuildDatabase
       // 
@@ -237,6 +246,7 @@
     private System.Windows.Forms.ToolStripMenuItem tsmiSettings;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunDedup;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunRefresh;
+    private System.Windows.Forms.ToolStripMenuItem tsmiSyncMirrors;
   }
 }
 

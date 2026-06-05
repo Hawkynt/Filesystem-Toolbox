@@ -371,6 +371,22 @@ namespace Filesystem_Toolbox {
       }
     });
 
+    private void tsmiSyncMirrors_Click(object sender, EventArgs e) => this.Async(() => {
+      this._currentStatus = new WindowStatus("Mirror Sync Running...");
+      try {
+        this._logic?.SyncMirrors();
+        this.SafelyInvoke(() => MessageBox.Show(
+          this,
+          "Verified-good files of all mirrored folders were copied into their mirrors.",
+          "Sync mirrors",
+          MessageBoxButtons.OK,
+          MessageBoxIcon.Information
+        ));
+      } finally {
+        this._currentStatus = WindowStatus.Empty;
+      }
+    });
+
     private void cmsItems_Opening(object sender, CancelEventArgs e) {
       var selected = this.dgvProblems.GetSelectedItems<DgvEntry>().ToArray();
       if (!selected.Any()) {
