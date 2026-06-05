@@ -17,8 +17,13 @@ namespace Filesystem_Toolbox.Core.Integrity {
     private readonly ConcurrentDictionary<string, string> _database = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     private readonly FileInfo _databaseFile;
     private readonly ScheduledTask _scheduledTask;
+    private readonly ScheduledTask _databaseParityTask;
+    private readonly DatabaseParityGuard _databaseGuard;
     private readonly TaskQueue _taskQueue = new TaskQueue { RequeueOnException = true };
     public DirectoryInfo RootDirectory { get; }
+
+    /// <summary>Raised when loading found a rotten database and tried to heal it.</summary>
+    public event Action<DirectoryInfo, DbHealResult> DatabaseHealed;
 
     public bool Enabled {
       get { return this._fileSystemWatcher.EnableRaisingEvents; }
@@ -40,7 +45,8 @@ namespace Filesystem_Toolbox.Core.Integrity {
       watcher.InternalBufferSize = 65536;
 
       this._scheduledTask = new ScheduledTask(this._Scheduler_OnExecute, deferredTime: TimeSpan.FromSeconds(10));
-
+      this._databaseGuard = new DatabaseParityGuard(rootDirectory);
+      this._databaseParityTask = new ScheduledTask(this._RebuildDatabaseParity, deferredTime: TimeSpan.FromSeconds(15));
     }
 
     #region IDisposable
@@ -84,6 +90,24 @@ namespace Filesystem_Toolbox.Core.Integrity {
 
       try {
         this.SaveDatabase();
+      } catch (IOException) {
+        ;
+      } catch (UnauthorizedAccessException) {
+        ;
+      }
+    }
+
+    /// <summary>
+    /// Rebuilds the database's own parity (debounced after saves). Failures are harmless:
+    /// the next save schedules another attempt.
+    /// </summary>
+    private void _RebuildDatabaseParity() {
+      this._databaseFile.Refresh();
+      if (!this._databaseFile.Exists)
+        return;
+
+      try {
+        this._databaseGuard.Protect(this._databaseFile);
       } catch (IOException) {
         ;
       } catch (UnauthorizedAccessException) {
@@ -249,6 +273,9 @@ namespace Filesystem_Toolbox.Core.Integrity {
         file.Attributes |= FileAttributes.System | FileAttributes.Hidden;
 
       }
+
+      // the database guards everything else, so it gets its own parity (debounced)
+      this._databaseParityTask.Schedule();
     }
 
     public void LoadDatabase() {
@@ -258,6 +285,13 @@ namespace Filesystem_Toolbox.Core.Integrity {
         file.Refresh();
         if (!file.Exists)
           return;
+
+        // the database itself may have rotted on the medium - heal it before trusting it
+        if (!this._databaseGuard.IsHealthy(file)) {
+          var healResult = this._databaseGuard.Heal(file);
+          this.DatabaseHealed?.Invoke(this.RootDirectory, healResult);
+          file.Refresh();
+        }
 
         foreach (var line in file.ReadLines()) {
           if (line.IsNullOrWhiteSpace())
