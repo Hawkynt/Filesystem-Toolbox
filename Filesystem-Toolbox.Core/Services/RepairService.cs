@@ -1,7 +1,6 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using Filesystem_Toolbox.Core.Integrity;
 using Filesystem_Toolbox.Core.Redundancy;
@@ -120,125 +119,29 @@ namespace Filesystem_Toolbox.Core.Services {
         return this._TryMirrorRestore(file, stored, 0)
                ?? new RepairOutcome(file, RepairResult.ParityMissing);
 
-      long badShardsTotal = 0, stripesRepaired = 0;
-      bool repaired;
-      var parityWasDamaged = false;
+      ParityRepairCore.Outcome outcome;
 
       // NOTE: the mirror fallback and the parity self-heal both rewrite the parity file,
-      //       so they must only run after the reader below released its handle
+      //       so they must only run after the repair core released its reader handle
       try {
-        repaired = this._TryRepairUsingParity(file, stored, token, ref badShardsTotal, ref stripesRepaired, ref parityWasDamaged);
+        outcome = ParityRepairCore.TryRepairFile(file, this._parityStore.GetParityFile(file), stored.Hash, token);
       } catch (ParityFormatException) {
 
         // structurally broken parity - useless for this repair, but rebuildable once the file is healthy again
-        repaired = false;
+        outcome = default;
       }
 
-      if (!repaired)
-        return this._TryMirrorRestore(file, stored, badShardsTotal)
-               ?? new RepairOutcome(file, RepairResult.Unrepairable, badShardsTotal, stripesRepaired);
+      if (!outcome.Repaired)
+        return this._TryMirrorRestore(file, stored, outcome.BadShards)
+               ?? new RepairOutcome(file, RepairResult.Unrepairable, outcome.BadShards, outcome.StripesRepaired);
+
+      this._RestoreMetadata(file, stored, FileAttributes.Normal);
 
       // parity self-heal: data is known-good again, so damaged parity shards can be regenerated
-      if (parityWasDamaged)
+      if (outcome.ParityWasDamaged)
         this._parityStore.BuildParity(file, token);
 
-      return new RepairOutcome(file, RepairResult.Repaired, badShardsTotal, stripesRepaired);
-    }
-
-    /// <summary>The actual stripe-wise erasure repair; <c>false</c> means the caller should try the mirror.</summary>
-    private bool _TryRepairUsingParity(FileInfo file, ChecksumEntry stored, CancellationToken token, ref long badShardsTotal, ref long stripesRepaired, ref bool parityWasDamaged) {
-      using (var reader = this._parityStore.OpenParity(file)) {
-        if (!reader.Header.OriginalSha512.SequenceEqual(stored.Hash))
-          return false; // stale parity - never repair towards outdated content
-
-        var header = reader.Header;
-        var k = header.DataShards;
-        var m = header.ParityShards;
-        var shardSize = header.ShardSize;
-        var codec = new ReedSolomonCodec(k, m);
-
-        var shards = new byte[k + m][];
-        for (var i = 0; i < shards.Length; ++i)
-          shards[i] = new byte[shardSize];
-
-        var present = new bool[k + m];
-
-        var temporary = new FileInfo(file.FullName + ".fst-repair");
-        try {
-          byte[] repairedHash;
-          using (var damagedStream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan))
-          using (var repairedStream = new FileStream(temporary.FullName, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16))
-          using (var sha512 = SHA512.Create()) {
-            var remaining = header.OriginalLength;
-
-            for (long stripe = 0; stripe < header.StripeCount; ++stripe) {
-              token.ThrowIfCancellationRequested();
-
-              // read this stripe's data shards from the damaged file; CRC mismatches become erasures
-              var stripeDamaged = false;
-              for (var shard = 0; shard < k; ++shard) {
-                var buffer = shards[shard];
-                var read = _ReadFully(damagedStream, buffer);
-                if (read < shardSize)
-                  Array.Clear(buffer, read, shardSize - read);
-
-                present[shard] = Crc32C.Compute(buffer, 0, shardSize) == reader.GetShardCrc(stripe, shard);
-                if (present[shard])
-                  continue;
-
-                stripeDamaged = true;
-                ++badShardsTotal;
-              }
-
-              if (stripeDamaged) {
-                for (var parityIndex = 0; parityIndex < m; ++parityIndex) {
-                  var buffer = shards[k + parityIndex];
-                  reader.ReadParityShard(stripe, parityIndex, buffer);
-                  present[k + parityIndex] = Crc32C.Compute(buffer, 0, shardSize) == reader.GetShardCrc(stripe, k + parityIndex);
-                  if (!present[k + parityIndex]) {
-                    parityWasDamaged = true;
-                    ++badShardsTotal;
-                  }
-                }
-
-                if (!codec.DecodeErasures(shards, present, shardSize))
-                  return false; // more erasures than parity can cover in this stripe
-
-                ++stripesRepaired;
-              }
-
-              // emit the (possibly reconstructed) data shards, trimmed to the original length
-              for (var shard = 0; shard < k && remaining > 0; ++shard) {
-                var chunk = (int)Math.Min(shardSize, remaining);
-                repairedStream.Write(shards[shard], 0, chunk);
-                sha512.TransformBlock(shards[shard], 0, chunk, null, 0);
-                remaining -= chunk;
-              }
-            }
-
-            sha512.TransformFinalBlock([], 0, 0);
-            repairedHash = sha512.Hash;
-          }
-
-          // never ship an unverified result - the reconstructed file must match the recorded hash exactly
-          if (!repairedHash.SequenceEqual(stored.Hash))
-            return false;
-
-          file.Refresh();
-          var attributes = file.Exists ? file.Attributes : FileAttributes.Normal;
-          if (file.Exists)
-            file.Delete();
-
-          File.Move(temporary.FullName, file.FullName);
-          this._RestoreMetadata(file, stored, attributes);
-        } finally {
-          temporary.Refresh();
-          if (temporary.Exists)
-            temporary.Delete();
-        }
-
-        return true;
-      }
+      return new RepairOutcome(file, RepairResult.Repaired, outcome.BadShards, outcome.StripesRepaired);
     }
 
     private RepairOutcome _TryMirrorRestore(FileInfo file, ChecksumEntry stored, long badShardsFound) {
@@ -283,19 +186,6 @@ namespace Filesystem_Toolbox.Core.Services {
       } catch (UnauthorizedAccessException) {
         ;
       }
-    }
-
-    private static int _ReadFully(Stream stream, byte[] buffer) {
-      var total = 0;
-      while (total < buffer.Length) {
-        var read = stream.Read(buffer, total, buffer.Length - total);
-        if (read == 0)
-          break;
-
-        total += read;
-      }
-
-      return total;
     }
 
   }
