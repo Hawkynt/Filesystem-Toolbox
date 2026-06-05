@@ -1,9 +1,14 @@
-﻿using System;
+using System;
+using System.Threading;
 using System.Windows.Forms;
 using Filesystem_Toolbox.Core;
 
 namespace Filesystem_Toolbox {
   static class Program {
+
+    private const string _MUTEX_NAME = "Filesystem-Toolbox.SingleInstance";
+    private const string _SHOW_SIGNAL_NAME = "Filesystem-Toolbox.ShowWindow";
+
     /// <summary>
     /// Der Haupteinstiegspunkt für die Anwendung.
     /// </summary>
@@ -12,32 +17,50 @@ namespace Filesystem_Toolbox {
       Application.EnableVisualStyles();
       Application.SetCompatibleTextRenderingDefault(false);
 
-      AppDomain.CurrentDomain.FirstChanceException += (s, e) => {
-        ;
-      };
-
-      using (var logic = new ToolboxService()) {
-        logic.LoadConfiguration();
-        // TODO: allow configuring folders from within gui
-        // TODO: allow configuring automatic checks from gui
-
-        using (var mainForm = new MainForm(logic))
-        using (var notificationIcon = new NotifyIcon {
-          Icon = mainForm.Icon,
-          Text = mainForm.Text,
-        }) {
-
-          // ReSharper disable once AccessToDisposedClosure
-          notificationIcon.DoubleClick += (_, __) => mainForm.Show();
-          notificationIcon.ContextMenuStrip = mainForm.cmsTrayMenu;
-          notificationIcon.Visible = true;
-
-          Application.Run();
-          notificationIcon.Visible = false;
-
+      // single instance per session: a second start pops the existing window instead
+      using (var mutex = new Mutex(true, _MUTEX_NAME, out var isFirstInstance))
+      using (var showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, _SHOW_SIGNAL_NAME)) {
+        if (!isFirstInstance) {
+          showSignal.Set();
+          return;
         }
 
-        logic.SaveConfiguration();
+        using (var logic = new ToolboxService()) {
+          logic.LoadConfiguration();
+
+          using (var mainForm = new MainForm(logic))
+          using (var notificationIcon = new NotifyIcon {
+            Icon = mainForm.Icon,
+            Text = mainForm.Text,
+          }) {
+
+            // ReSharper disable once AccessToDisposedClosure
+            notificationIcon.DoubleClick += (_, __) => mainForm.Show();
+            notificationIcon.ContextMenuStrip = mainForm.cmsTrayMenu;
+            notificationIcon.Visible = true;
+
+            var showWaitHandle = ThreadPool.RegisterWaitForSingleObject(
+              showSignal,
+              // ReSharper disable once AccessToDisposedClosure
+              (_, __) => mainForm.SafelyInvoke(() => {
+                mainForm.Show();
+                mainForm.Activate();
+              }),
+              null,
+              Timeout.Infinite,
+              false
+            );
+
+            Application.Run();
+            showWaitHandle.Unregister(null);
+            notificationIcon.Visible = false;
+
+          }
+
+          logic.SaveConfiguration();
+        }
+
+        GC.KeepAlive(mutex);
       }
     }
   }

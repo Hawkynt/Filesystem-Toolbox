@@ -32,9 +32,15 @@
       this.dgvProblems = new System.Windows.Forms.DataGridView();
       this.cmsItems = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiAcceptDifference = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRepair = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRestoreFromMirror = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRunCommand = new System.Windows.Forms.ToolStripMenuItem();
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiVerifyFolders = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiSettings = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRunDedup = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRunRefresh = new System.Windows.Forms.ToolStripMenuItem();
       this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -99,28 +105,77 @@
       // cmsItems
       // 
       this.cmsItems.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.tsmiAcceptDifference});
+            this.tsmiRepair,
+            this.tsmiRestoreFromMirror,
+            this.tsmiAcceptDifference,
+            this.tsmiRunCommand});
       this.cmsItems.Name = "cmsItems";
-      this.cmsItems.Size = new System.Drawing.Size(112, 26);
+      this.cmsItems.Size = new System.Drawing.Size(180, 92);
       this.cmsItems.Opening += new System.ComponentModel.CancelEventHandler(this.cmsItems_Opening);
-      // 
+      //
+      // tsmiRepair
+      //
+      this.tsmiRepair.Image = global::Filesystem_Toolbox.Properties.Resources._16x16_Bricks;
+      this.tsmiRepair.Name = "tsmiRepair";
+      this.tsmiRepair.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRepair.Text = "Repair";
+      this.tsmiRepair.Click += new System.EventHandler(this.tsmiRepair_Click);
+      //
+      // tsmiRestoreFromMirror
+      //
+      this.tsmiRestoreFromMirror.Name = "tsmiRestoreFromMirror";
+      this.tsmiRestoreFromMirror.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRestoreFromMirror.Text = "Restore from mirror";
+      this.tsmiRestoreFromMirror.Click += new System.EventHandler(this.tsmiRestoreFromMirror_Click);
+      //
+      // tsmiRunCommand
+      //
+      this.tsmiRunCommand.Name = "tsmiRunCommand";
+      this.tsmiRunCommand.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRunCommand.Text = "Run command";
+      this.tsmiRunCommand.Click += new System.EventHandler(this.tsmiRunCommand_Click);
+      //
       // tsmiAcceptDifference
-      // 
+      //
       this.tsmiAcceptDifference.Image = global::Filesystem_Toolbox.Properties.Resources.tick_small;
       this.tsmiAcceptDifference.Name = "tsmiAcceptDifference";
-      this.tsmiAcceptDifference.Size = new System.Drawing.Size(111, 22);
-      this.tsmiAcceptDifference.Text = "Accept";
+      this.tsmiAcceptDifference.Size = new System.Drawing.Size(179, 22);
+      this.tsmiAcceptDifference.Text = "Accept change";
       this.tsmiAcceptDifference.Click += new System.EventHandler(this.tsmiAcceptDifference_Click);
       // 
       // cmsTrayMenu
       // 
       this.cmsTrayMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             tsmiShowForm,
+            this.tsmiSettings,
             this.tsmiRebuildDatabase,
             this.tsmiVerifyFolders,
+            this.tsmiRunDedup,
+            this.tsmiRunRefresh,
             tsmiExitApplication});
       this.cmsTrayMenu.Name = "cmsTrayMenu";
-      this.cmsTrayMenu.Size = new System.Drawing.Size(115, 92);
+      this.cmsTrayMenu.Size = new System.Drawing.Size(180, 158);
+      //
+      // tsmiSettings
+      //
+      this.tsmiSettings.Name = "tsmiSettings";
+      this.tsmiSettings.Size = new System.Drawing.Size(179, 22);
+      this.tsmiSettings.Text = "Settings...";
+      this.tsmiSettings.Click += new System.EventHandler(this.tsmiSettings_Click);
+      //
+      // tsmiRunDedup
+      //
+      this.tsmiRunDedup.Name = "tsmiRunDedup";
+      this.tsmiRunDedup.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRunDedup.Text = "Merge duplicates";
+      this.tsmiRunDedup.Click += new System.EventHandler(this.tsmiRunDedup_Click);
+      //
+      // tsmiRunRefresh
+      //
+      this.tsmiRunRefresh.Name = "tsmiRunRefresh";
+      this.tsmiRunRefresh.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRunRefresh.Text = "Refresh media";
+      this.tsmiRunRefresh.Click += new System.EventHandler(this.tsmiRunRefresh_Click);
       // 
       // tsmiRebuildDatabase
       // 
@@ -176,6 +231,12 @@
     private System.Windows.Forms.Timer tStatusTimer;
     private System.Windows.Forms.ContextMenuStrip cmsItems;
     private System.Windows.Forms.ToolStripMenuItem tsmiAcceptDifference;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRepair;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRestoreFromMirror;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRunCommand;
+    private System.Windows.Forms.ToolStripMenuItem tsmiSettings;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRunDedup;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRunRefresh;
   }
 }
 

@@ -159,6 +159,14 @@ namespace Filesystem_Toolbox.Core {
       }
     });
 
+    /// <summary>Runs the folder's configured on-corruption command for one file, if any is set.</summary>
+    public bool RunOnCorruptionCommand(FolderIntegrityChecker checker, FileInfo file) {
+      var configuration = this.GetFolderConfiguration(checker);
+      return configuration != null
+        && Commands.OnCorruptionCommandRunner.Run(configuration.OnCorruptionCommand, file, checker.RootDirectory)
+        ;
+    }
+
     /// <summary>Whether the folder's volume supports hard links (NTFS only).</summary>
     public static bool SupportsHardLinks(DirectoryInfo directory) {
       try {
@@ -192,6 +200,23 @@ namespace Filesystem_Toolbox.Core {
       };
 
       return Dedup.DuplicateFileMerger.ProcessFolders(new[] { root }, options, log);
+    }
+
+    /// <summary>Merges duplicates in every folder that has dedup enabled; returns the combined report.</summary>
+    public Dedup.DedupReport RunDedupAll(bool dryRun = false, Action<string> log = null) {
+      var total = new Dedup.DedupReport();
+      var ranAtLeastOnce = false;
+
+      this._ExecuteOnAllContexts(context => {
+        var report = this.RunDedup(context.Checker, dryRun, log);
+        if (report == null)
+          return;
+
+        ranAtLeastOnce = true;
+        total.Merge(report);
+      });
+
+      return ranAtLeastOnce ? total : null;
     }
 
     /// <summary>Runs the preventive flash refresh on every folder that has it enabled.</summary>

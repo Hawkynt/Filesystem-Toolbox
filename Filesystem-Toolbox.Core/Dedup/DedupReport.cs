@@ -29,5 +29,16 @@ namespace Filesystem_Toolbox.Core.Dedup {
     internal void IncrementLinksSeen() => Interlocked.Increment(ref this._linksSeen);
     internal void IncrementErrors() => Interlocked.Increment(ref this._errors);
 
+    /// <summary>Accumulates another run's counters into this report.</summary>
+    public void Merge(DedupReport other) {
+      Interlocked.Add(ref this._foldersScanned, other.FoldersScanned);
+      Interlocked.Add(ref this._filesScanned, other.FilesScanned);
+      Interlocked.Add(ref this._bytesScanned, other.BytesScanned);
+      Interlocked.Add(ref this._hardLinksCreated, other.HardLinksCreated);
+      Interlocked.Add(ref this._symbolicLinksCreated, other.SymbolicLinksCreated);
+      Interlocked.Add(ref this._linksSeen, other.LinksSeen);
+      Interlocked.Add(ref this._errors, other.Errors);
+    }
+
   }
 }
