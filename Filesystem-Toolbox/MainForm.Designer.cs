@@ -33,7 +33,7 @@
       this.cmsItems = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiAcceptDifference = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRepair = new System.Windows.Forms.ToolStripMenuItem();
-      this.tsmiRestoreFromMirror = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRestoreFromBackup = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunCommand = new System.Windows.Forms.ToolStripMenuItem();
       this.cmsTrayMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
       this.tsmiRebuildDatabase = new System.Windows.Forms.ToolStripMenuItem();
@@ -41,7 +41,7 @@
       this.tsmiSettings = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunDedup = new System.Windows.Forms.ToolStripMenuItem();
       this.tsmiRunRefresh = new System.Windows.Forms.ToolStripMenuItem();
-      this.tsmiSyncMirrors = new System.Windows.Forms.ToolStripMenuItem();
+      this.tsmiRunBackup = new System.Windows.Forms.ToolStripMenuItem();
       this.tStatusTimer = new System.Windows.Forms.Timer(this.components);
       ssStatusBar = new System.Windows.Forms.StatusStrip();
       tsmiShowForm = new System.Windows.Forms.ToolStripMenuItem();
@@ -107,7 +107,7 @@
       // 
       this.cmsItems.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.tsmiRepair,
-            this.tsmiRestoreFromMirror,
+            this.tsmiRestoreFromBackup,
             this.tsmiAcceptDifference,
             this.tsmiRunCommand});
       this.cmsItems.Name = "cmsItems";
@@ -122,12 +122,12 @@
       this.tsmiRepair.Text = "Repair";
       this.tsmiRepair.Click += new System.EventHandler(this.tsmiRepair_Click);
       //
-      // tsmiRestoreFromMirror
+      // tsmiRestoreFromBackup
       //
-      this.tsmiRestoreFromMirror.Name = "tsmiRestoreFromMirror";
-      this.tsmiRestoreFromMirror.Size = new System.Drawing.Size(179, 22);
-      this.tsmiRestoreFromMirror.Text = "Restore from mirror";
-      this.tsmiRestoreFromMirror.Click += new System.EventHandler(this.tsmiRestoreFromMirror_Click);
+      this.tsmiRestoreFromBackup.Name = "tsmiRestoreFromBackup";
+      this.tsmiRestoreFromBackup.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRestoreFromBackup.Text = "Restore from backup";
+      this.tsmiRestoreFromBackup.Click += new System.EventHandler(this.tsmiRestoreFromBackup_Click);
       //
       // tsmiRunCommand
       //
@@ -153,7 +153,7 @@
             this.tsmiVerifyFolders,
             this.tsmiRunDedup,
             this.tsmiRunRefresh,
-            this.tsmiSyncMirrors,
+            this.tsmiRunBackup,
             tsmiExitApplication});
       this.cmsTrayMenu.Name = "cmsTrayMenu";
       this.cmsTrayMenu.Size = new System.Drawing.Size(180, 158);
@@ -179,12 +179,12 @@
       this.tsmiRunRefresh.Text = "Refresh media";
       this.tsmiRunRefresh.Click += new System.EventHandler(this.tsmiRunRefresh_Click);
       //
-      // tsmiSyncMirrors
+      // tsmiRunBackup
       //
-      this.tsmiSyncMirrors.Name = "tsmiSyncMirrors";
-      this.tsmiSyncMirrors.Size = new System.Drawing.Size(179, 22);
-      this.tsmiSyncMirrors.Text = "Sync mirrors";
-      this.tsmiSyncMirrors.Click += new System.EventHandler(this.tsmiSyncMirrors_Click);
+      this.tsmiRunBackup.Name = "tsmiRunBackup";
+      this.tsmiRunBackup.Size = new System.Drawing.Size(179, 22);
+      this.tsmiRunBackup.Text = "Backup now";
+      this.tsmiRunBackup.Click += new System.EventHandler(this.tsmiRunBackup_Click);
       // 
       // tsmiRebuildDatabase
       // 
@@ -241,12 +241,12 @@
     private System.Windows.Forms.ContextMenuStrip cmsItems;
     private System.Windows.Forms.ToolStripMenuItem tsmiAcceptDifference;
     private System.Windows.Forms.ToolStripMenuItem tsmiRepair;
-    private System.Windows.Forms.ToolStripMenuItem tsmiRestoreFromMirror;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRestoreFromBackup;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunCommand;
     private System.Windows.Forms.ToolStripMenuItem tsmiSettings;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunDedup;
     private System.Windows.Forms.ToolStripMenuItem tsmiRunRefresh;
-    private System.Windows.Forms.ToolStripMenuItem tsmiSyncMirrors;
+    private System.Windows.Forms.ToolStripMenuItem tsmiRunBackup;
   }
 }
 

@@ -1,4 +1,4 @@
-using Filesystem_Toolbox.Core.Integrity;
+﻿using Filesystem_Toolbox.Core.Integrity;
 using Filesystem_Toolbox.Core.Redundancy;
 using Filesystem_Toolbox.Core.Services;
 
@@ -11,7 +11,7 @@ public class RepairServiceTests {
   private const int _SHARD = 64 * 1024;
 
   private DirectoryInfo _root = null!;
-  private DirectoryInfo _mirrorRoot = null!;
+  private DirectoryInfo _backupRoot = null!;
   private FolderIntegrityChecker _checker = null!;
   private ParityStore _parityStore = null!;
 
@@ -19,8 +19,8 @@ public class RepairServiceTests {
   public void SetUp() {
     this._root = new(Path.Combine(Path.GetTempPath(), $"FstRepairTest_{Guid.NewGuid()}"));
     this._root.Create();
-    this._mirrorRoot = new(Path.Combine(Path.GetTempPath(), $"FstRepairMirror_{Guid.NewGuid()}"));
-    this._mirrorRoot.Create();
+    this._backupRoot = new(Path.Combine(Path.GetTempPath(), $"FstRepairBackup_{Guid.NewGuid()}"));
+    this._backupRoot.Create();
     this._checker = new(this._root);
     this._parityStore = new(this._root, 25); // m = 4 parity shards per stripe
   }
@@ -28,7 +28,7 @@ public class RepairServiceTests {
   [TearDown]
   public void TearDown() {
     this._checker.Dispose();
-    foreach (var dir in new[] { this._root, this._mirrorRoot }) {
+    foreach (var dir in new[] { this._root, this._backupRoot }) {
       dir.Refresh();
       if (!dir.Exists)
         continue;
@@ -71,8 +71,10 @@ public class RepairServiceTests {
     File.SetLastWriteTimeUtc(file.FullName, mtime);
   }
 
-  private RepairService _Service(bool withMirror = false)
-    => new(this._checker, this._parityStore, withMirror ? new MirrorService(this._root, this._mirrorRoot) : null);
+  private BackupService _Backup() => new(this._checker, this._backupRoot, GfsRetentionPolicy.Default);
+
+  private RepairService _Service(bool withBackup = false)
+    => new(this._checker, this._parityStore, withBackup ? this._Backup() : null);
 
   private static byte[] _ExpectedContent(int length, int seed = 7) {
     var data = new byte[length];
@@ -120,7 +122,7 @@ public class RepairServiceTests {
   }
 
   [Test]
-  public void Given_MoreDamageThanParity_When_RepairingWithoutMirror_Then_Unrepairable() {
+  public void Given_MoreDamageThanParity_When_RepairingWithoutBackup_Then_Unrepairable() {
     var file = this._CreateProtectedFile("rot5.bin", 5 * _SHARD);
     _Corrupt(file, 0 * _SHARD + 5, 1 * _SHARD + 5, 2 * _SHARD + 5, 3 * _SHARD + 5, 4 * _SHARD + 5); // 5 > m
 
@@ -130,15 +132,15 @@ public class RepairServiceTests {
   }
 
   [Test]
-  public void Given_MoreDamageThanParity_When_RepairingWithGoodMirror_Then_RestoredFromMirror() {
+  public void Given_MoreDamageThanParity_When_RepairingWithGoodBackup_Then_RestoredFromBackup() {
     var file = this._CreateProtectedFile("rot5m.bin", 5 * _SHARD);
-    new MirrorService(this._root, this._mirrorRoot).Sync(file); // good copy exists
+    this._Backup().RunBackup(); // good snapshot exists
     _Corrupt(file, 0 * _SHARD + 5, 1 * _SHARD + 5, 2 * _SHARD + 5, 3 * _SHARD + 5, 4 * _SHARD + 5);
 
-    var outcome = this._Service(withMirror: true).Repair(file);
+    var outcome = this._Service(withBackup: true).Repair(file);
 
     Assert.Multiple(() => {
-      Assert.That(outcome.Result, Is.EqualTo(RepairResult.RepairedFromMirror));
+      Assert.That(outcome.Result, Is.EqualTo(RepairResult.RepairedFromBackup));
       Assert.That(File.ReadAllBytes(file.FullName), Is.EqualTo(_ExpectedContent(5 * _SHARD)));
     });
   }
@@ -197,7 +199,7 @@ public class RepairServiceTests {
   }
 
   [Test]
-  public void Given_DeletedFile_WithoutMirror_When_Repairing_Then_Unrepairable() {
+  public void Given_DeletedFile_WithoutBackup_When_Repairing_Then_Unrepairable() {
     var file = this._CreateProtectedFile("gone.bin", 10_000);
     file.Delete();
 
@@ -207,35 +209,35 @@ public class RepairServiceTests {
   }
 
   [Test]
-  public void Given_DeletedFile_WithGoodMirror_When_Repairing_Then_RestoredFromMirror() {
+  public void Given_DeletedFile_WithGoodBackup_When_Repairing_Then_RestoredFromBackup() {
     var file = this._CreateProtectedFile("gonem.bin", 10_000);
-    new MirrorService(this._root, this._mirrorRoot).Sync(file);
+    this._Backup().RunBackup();
     file.Delete();
 
-    var outcome = this._Service(withMirror: true).Repair(file);
+    var outcome = this._Service(withBackup: true).Repair(file);
 
     Assert.Multiple(() => {
-      Assert.That(outcome.Result, Is.EqualTo(RepairResult.RepairedFromMirror));
+      Assert.That(outcome.Result, Is.EqualTo(RepairResult.RepairedFromBackup));
       Assert.That(File.ReadAllBytes(file.FullName), Is.EqualTo(_ExpectedContent(10_000)));
     });
   }
 
   [Test]
-  public void Given_RottenMirrorCopy_When_Repairing_Then_MirrorIsRefused() {
-    var file = this._CreateProtectedFile("badmirror.bin", 5 * _SHARD);
-    var mirror = new MirrorService(this._root, this._mirrorRoot);
-    mirror.Sync(file);
+  public void Given_RottenBackupCopy_When_Repairing_Then_BackupIsRefused() {
+    var file = this._CreateProtectedFile("badbackup.bin", 5 * _SHARD);
+    var backup = this._Backup();
+    backup.RunBackup();
 
-    // the mirror copy itself rots
-    var mirrorFile = mirror.GetMirrorFile(file);
-    _Corrupt(mirrorFile, 100);
+    // the snapshot copy itself rots
+    var snapshotFile = new FileInfo(Path.Combine(backup.LatestSnapshot()!.FullName, "badbackup.bin"));
+    _Corrupt(snapshotFile, 100);
 
-    // too much damage for parity, so only the (bad) mirror could help
+    // too much damage for parity, so only the (bad) backup could help
     _Corrupt(file, 0 * _SHARD + 5, 1 * _SHARD + 5, 2 * _SHARD + 5, 3 * _SHARD + 5, 4 * _SHARD + 5);
 
-    var outcome = this._Service(withMirror: true).Repair(file);
+    var outcome = this._Service(withBackup: true).Repair(file);
 
-    Assert.That(outcome.Result, Is.EqualTo(RepairResult.Unrepairable), "a mismatching mirror copy must never be restored");
+    Assert.That(outcome.Result, Is.EqualTo(RepairResult.Unrepairable), "a mismatching backup copy must never be restored");
   }
 
   [Test]

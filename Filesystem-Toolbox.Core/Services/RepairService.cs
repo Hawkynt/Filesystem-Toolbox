@@ -15,8 +15,8 @@ namespace Filesystem_Toolbox.Core.Services {
     /// <summary>Reconstructed from Reed-Solomon parity; the full SHA-512 was re-verified before replacing.</summary>
     Repaired,
 
-    /// <summary>Restored as a whole from the mirror copy (hash-verified).</summary>
-    RepairedFromMirror,
+    /// <summary>Restored as a whole from a backup snapshot (hash-verified).</summary>
+    RepairedFromBackup,
 
     /// <summary>The file was fine but its parity was stale or damaged - parity was rebuilt.</summary>
     ParityRebuilt,
@@ -24,10 +24,10 @@ namespace Filesystem_Toolbox.Core.Services {
     /// <summary>The file was intentionally edited; repairing backwards is refused - accept the change instead.</summary>
     ModifiedNotRepaired,
 
-    /// <summary>No parity exists for this file and no mirror could help.</summary>
+    /// <summary>No parity exists for this file and no backup could help.</summary>
     ParityMissing,
 
-    /// <summary>Too much damage for the available parity and no usable mirror.</summary>
+    /// <summary>Too much damage for the available parity and no usable backup.</summary>
     Unrepairable,
 
     /// <summary>The repair attempt itself failed with an exception.</summary>
@@ -54,7 +54,7 @@ namespace Filesystem_Toolbox.Core.Services {
   }
 
   /// <summary>
-  /// Repairs bit rot using the parity store, falling back to a mirror copy where parity
+  /// Repairs bit rot using the parity store, falling back to backup snapshots where parity
   /// cannot help. Stale parity (bound to a different content state than the database
   /// records) is never used - repairing a file towards outdated content would itself
   /// be data loss.
@@ -63,12 +63,12 @@ namespace Filesystem_Toolbox.Core.Services {
 
     private readonly FolderIntegrityChecker _checker;
     private readonly ParityStore _parityStore;
-    private readonly MirrorService _mirror;
+    private readonly BackupService _backup;
 
-    public RepairService(FolderIntegrityChecker checker, ParityStore parityStore, MirrorService mirror = null) {
+    public RepairService(FolderIntegrityChecker checker, ParityStore parityStore, BackupService backup = null) {
       this._checker = checker ?? throw new ArgumentNullException(nameof(checker));
       this._parityStore = parityStore ?? throw new ArgumentNullException(nameof(parityStore));
-      this._mirror = mirror;
+      this._backup = backup;
     }
 
     public RepairOutcome Repair(FileInfo file, CancellationToken token = default) {
@@ -102,7 +102,7 @@ namespace Filesystem_Toolbox.Core.Services {
           return new RepairOutcome(file, RepairResult.ModifiedNotRepaired);
 
         case VerificationStatus.Missing:
-          return this._TryMirrorRestore(file, stored, 0)
+          return this._TryBackupRestore(file, stored, 0)
                  ?? new RepairOutcome(file, this._parityStore.HasParity(file) ? RepairResult.Unrepairable : RepairResult.ParityMissing);
 
         case VerificationStatus.BitRot:
@@ -116,12 +116,12 @@ namespace Filesystem_Toolbox.Core.Services {
 
     private RepairOutcome _RepairFromParity(FileInfo file, ChecksumEntry stored, CancellationToken token) {
       if (!this._parityStore.HasParity(file))
-        return this._TryMirrorRestore(file, stored, 0)
+        return this._TryBackupRestore(file, stored, 0)
                ?? new RepairOutcome(file, RepairResult.ParityMissing);
 
       ParityRepairCore.Outcome outcome;
 
-      // NOTE: the mirror fallback and the parity self-heal both rewrite the parity file,
+      // NOTE: the backup fallback and the parity self-heal both rewrite the parity file,
       //       so they must only run after the repair core released its reader handle
       try {
         outcome = ParityRepairCore.TryRepairFile(file, this._parityStore.GetParityFile(file), stored.Hash, token);
@@ -132,7 +132,7 @@ namespace Filesystem_Toolbox.Core.Services {
       }
 
       if (!outcome.Repaired)
-        return this._TryMirrorRestore(file, stored, outcome.BadShards)
+        return this._TryBackupRestore(file, stored, outcome.BadShards)
                ?? new RepairOutcome(file, RepairResult.Unrepairable, outcome.BadShards, outcome.StripesRepaired);
 
       this._RestoreMetadata(file, stored, FileAttributes.Normal);
@@ -144,8 +144,8 @@ namespace Filesystem_Toolbox.Core.Services {
       return new RepairOutcome(file, RepairResult.Repaired, outcome.BadShards, outcome.StripesRepaired);
     }
 
-    private RepairOutcome _TryMirrorRestore(FileInfo file, ChecksumEntry stored, long badShardsFound) {
-      if (this._mirror == null)
+    private RepairOutcome _TryBackupRestore(FileInfo file, ChecksumEntry stored, long badShardsFound) {
+      if (this._backup == null)
         return null;
 
       byte[] hash;
@@ -155,7 +155,7 @@ namespace Filesystem_Toolbox.Core.Services {
         return null;
       }
 
-      if (!this._mirror.Restore(file, hash))
+      if (!this._backup.Restore(file, hash))
         return null;
 
       this._RestoreMetadata(file, stored, FileAttributes.Normal);
@@ -164,7 +164,7 @@ namespace Filesystem_Toolbox.Core.Services {
       if (!this._parityStore.IsParityCurrent(file, stored))
         this._parityStore.BuildParity(file);
 
-      return new RepairOutcome(file, RepairResult.RepairedFromMirror, badShardsFound);
+      return new RepairOutcome(file, RepairResult.RepairedFromBackup, badShardsFound);
     }
 
     /// <summary>

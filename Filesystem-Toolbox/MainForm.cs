@@ -75,7 +75,7 @@ namespace Filesystem_Toolbox {
       public static DgvEntry FromRepair(FolderIntegrityChecker checker, RepairOutcome outcome) => new DgvEntry(
         checker,
         outcome.File,
-        outcome.Result == RepairResult.RepairedFromMirror ? "Restored (auto)" : "Repaired (auto)",
+        outcome.Result == RepairResult.RepairedFromBackup ? "Restored (auto)" : "Repaired (auto)",
         null,
         null,
         outcome.Error?.Message,
@@ -171,7 +171,7 @@ namespace Filesystem_Toolbox {
         case VerificationStatus.Error:
           if (configuration?.AutoRepair == true && this._logic?.CanRepair(checker) == true) {
             var outcome = this._logic.Repair(checker, result.File);
-            if (outcome.Result is RepairResult.Repaired or RepairResult.RepairedFromMirror) {
+            if (outcome.Result is RepairResult.Repaired or RepairResult.RepairedFromBackup) {
               this.SafelyInvoke(() => this._AddEntry(DgvEntry.FromRepair(checker, outcome)));
               return;
             }
@@ -277,7 +277,7 @@ namespace Filesystem_Toolbox {
             var outcome = this._logic.Repair(item.Checker, item.File);
             switch (outcome.Result) {
               case RepairResult.Repaired:
-              case RepairResult.RepairedFromMirror:
+              case RepairResult.RepairedFromBackup:
               case RepairResult.ParityRebuilt:
               case RepairResult.NotNeeded:
                 this._RemoveEntriesForFile(item.File);
@@ -300,19 +300,19 @@ namespace Filesystem_Toolbox {
       });
     }
 
-    private void tsmiRestoreFromMirror_Click(object sender, EventArgs e) {
+    private void tsmiRestoreFromBackup_Click(object sender, EventArgs e) {
       var items = this.dgvProblems.GetSelectedItems<DgvEntry>().ToArray();
       this.Async(() => {
-        this._currentStatus = new WindowStatus("Mirror Restore Running...");
+        this._currentStatus = new WindowStatus("Backup Restore Running...");
         try {
           foreach (var item in items)
-            if (this._logic.RestoreFromMirror(item.Checker, item.File))
+            if (this._logic.RestoreFromBackup(item.Checker, item.File))
               this._RemoveEntriesForFile(item.File);
             else
               this.SafelyInvoke(() => MessageBox.Show(
                 this,
-                $"{item.File.Name}: no usable mirror copy (missing or checksum mismatch)",
-                "Restore from mirror",
+                $"{item.File.Name}: no backup snapshot holds this content (missing or rotted)",
+                "Restore from backup",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning
               ));
@@ -376,14 +376,19 @@ namespace Filesystem_Toolbox {
       }
     });
 
-    private void tsmiSyncMirrors_Click(object sender, EventArgs e) => this.Async(() => {
-      this._currentStatus = new WindowStatus("Mirror Sync Running...");
+    private void tsmiRunBackup_Click(object sender, EventArgs e) => this.Async(() => {
+      this._currentStatus = new WindowStatus("Backup Running...");
       try {
-        this._logic?.SyncMirrors();
+        var reports = this._logic?.RunBackupAll();
         this.SafelyInvoke(() => MessageBox.Show(
           this,
-          "Verified-good files of all mirrored folders were copied into their mirrors.",
-          "Sync mirrors",
+          reports == null
+            ? "No folder has a backup target configured."
+            : string.Join(
+                Environment.NewLine,
+                reports.Select(r => $"{r.SnapshotName}: {r.Copied} copied, {r.Linked} linked, {r.SkippedDirty} skipped dirty, {r.Errors} errors, {r.SnapshotsPruned} pruned")
+              ),
+          "Backup",
           MessageBoxButtons.OK,
           MessageBoxIcon.Information
         ));
@@ -401,7 +406,7 @@ namespace Filesystem_Toolbox {
 
       var logic = this._logic;
       this.tsmiRepair.Enabled = selected.Any(i => logic?.CanRepair(i.Checker) == true);
-      this.tsmiRestoreFromMirror.Enabled = selected.Any(i => logic?.HasMirror(i.Checker) == true);
+      this.tsmiRestoreFromBackup.Enabled = selected.Any(i => logic?.CanRestoreFromBackup(i.Checker) == true);
       this.tsmiRunCommand.Enabled = selected.Any(i => !string.IsNullOrWhiteSpace(logic?.GetEffectiveSettings(i.Checker)?.OnCorruptionCommand));
     }
 

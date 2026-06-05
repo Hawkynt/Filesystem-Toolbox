@@ -26,7 +26,7 @@ namespace Filesystem_Toolbox.Core {
       public EffectiveSettings Effective { get; }
 
       public ParityStore ParityStore { get; }
-      public MirrorService Mirror { get; }
+      public BackupService Backup { get; }
       public RepairService Repair { get; }
       public RefreshService Refresh { get; }
       private readonly ParityMaintenanceQueue _maintenanceQueue;
@@ -41,9 +41,13 @@ namespace Filesystem_Toolbox.Core {
         this._maintenanceQueue = new ParityMaintenanceQueue(checker, this.ParityStore);
 
         if (!effective.BackupPath.IsNullOrWhiteSpace())
-          this.Mirror = new MirrorService(checker.RootDirectory, new DirectoryInfo(effective.BackupPath));
+          this.Backup = new BackupService(
+            checker,
+            new DirectoryInfo(effective.BackupPath),
+            new GfsRetentionPolicy(effective.GfsKeepDaily, effective.GfsKeepWeekly, effective.GfsKeepMonthly)
+          );
 
-        this.Repair = new RepairService(checker, this.ParityStore, this.Mirror);
+        this.Repair = new RepairService(checker, this.ParityStore, this.Backup);
 
         if (effective.RefreshIntervalDays > 0)
           this.Refresh = new RefreshService(checker, TimeSpan.FromDays(effective.RefreshIntervalDays));
@@ -96,7 +100,7 @@ namespace Filesystem_Toolbox.Core {
 
     public bool CanRepair(FolderIntegrityChecker checker) => this._FindContext(checker)?.Repair != null;
 
-    public bool HasMirror(FolderIntegrityChecker checker) => this._FindContext(checker)?.Mirror != null;
+    public bool CanRestoreFromBackup(FolderIntegrityChecker checker) => this._FindContext(checker)?.Backup != null;
 
     public void RebuildDatabases() => this._ExecuteOnAllCheckers(c => c.RebuildDatabase());
 
@@ -138,14 +142,14 @@ namespace Filesystem_Toolbox.Core {
       return context.Repair.Repair(file, token);
     }
 
-    /// <summary>Restores one file from the folder's mirror (hash-verified); <c>false</c> when no usable copy exists.</summary>
-    public bool RestoreFromMirror(FolderIntegrityChecker checker, FileInfo file) {
+    /// <summary>Restores one file from the folder's backup snapshots (hash-verified, newest matching wins).</summary>
+    public bool RestoreFromBackup(FolderIntegrityChecker checker, FileInfo file) {
       var context = this._FindContext(checker);
-      if (context?.Mirror == null || !checker.TryGetEntry(file, out var entry))
+      if (context?.Backup == null || !checker.TryGetEntry(file, out var entry))
         return false;
 
       try {
-        return context.Mirror.Restore(file, entry.Hash);
+        return context.Backup.Restore(file, entry.Hash);
       } catch (IOException) {
         return false;
       } catch (UnauthorizedAccessException) {
@@ -153,28 +157,20 @@ namespace Filesystem_Toolbox.Core {
       }
     }
 
-    /// <summary>Pushes verified-good files of all mirrored folders into their mirrors.</summary>
-    public void SyncMirrors(CancellationToken token = default) => this._ExecuteOnAllContexts(context => {
-      if (context.Mirror == null)
-        return;
+    /// <summary>Creates a GFS snapshot of one watch root; null when no backup is configured.</summary>
+    public BackupReport RunBackup(string rootPath, CancellationToken token = default)
+      => this._FindContextByRoot(rootPath)?.Backup?.RunBackup(token);
 
-      foreach (var pair in context.Checker.GetDatabaseSnapshot()) {
-        token.ThrowIfCancellationRequested();
+    /// <summary>Creates GFS snapshots of every folder with a backup target; null when none has one.</summary>
+    public List<BackupReport> RunBackupAll(CancellationToken token = default) {
+      var reports = new List<BackupReport>();
+      this._ExecuteOnAllContexts(context => {
+        if (context.Backup != null)
+          reports.Add(context.Backup.RunBackup(token));
+      });
 
-        if (!ChecksumEntry.TryParse(pair.Value, out var stored))
-          continue;
-
-        var file = context.Checker.GetFile(pair.Key);
-        try {
-          if (ChecksumEntry.FromFile(file).ContentEquals(stored))
-            context.Mirror.Sync(file, token);
-        } catch (IOException) {
-          ;
-        } catch (UnauthorizedAccessException) {
-          ;
-        }
-      }
-    });
+      return reports.Count > 0 ? reports : null;
+    }
 
     /// <summary>Runs the effective on-corruption command for one file, if any is configured along the chain.</summary>
     public bool RunOnCorruptionCommand(FolderIntegrityChecker checker, FileInfo file) {
