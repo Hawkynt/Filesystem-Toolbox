@@ -1,10 +1,10 @@
 # Filesystem-Toolbox
 
-[![License](https://img.shields.io/github/license/Hawkynt/Filesystem-Toolbox)](https://github.com/Hawkynt/Filesystem-Toolbox/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/Hawkynt/Filesystem-Toolbox)](https://github.com/Hawkynt/Filesystem-Toolbox/blob/main/LICENSE)
 [![Language](https://img.shields.io/github/languages/top/Hawkynt/Filesystem-Toolbox?color=8957D5)](https://github.com/Hawkynt/Filesystem-Toolbox)
 
-[![CI](https://github.com/Hawkynt/Filesystem-Toolbox/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/Hawkynt/Filesystem-Toolbox/actions/workflows/ci.yml)
-![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/Filesystem-Toolbox?branch=master)
+[![CI](https://github.com/Hawkynt/Filesystem-Toolbox/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Hawkynt/Filesystem-Toolbox/actions/workflows/ci.yml)
+![Last Commit](https://img.shields.io/github/last-commit/Hawkynt/Filesystem-Toolbox?branch=main)
 ![Activity](https://img.shields.io/github/commit-activity/m/Hawkynt/Filesystem-Toolbox)
 
 [![Stars](https://img.shields.io/github/stars/Hawkynt/Filesystem-Toolbox?color=FFD700)](https://github.com/Hawkynt/Filesystem-Toolbox/stargazers)
@@ -19,11 +19,11 @@
 
 > A Windows tray application that protects folders - especially on USB sticks and SD cards that silently "forget" data as their flash cells lose charge - by detecting bit rot through SHA-512 checksums, repairing it from locally stored Reed-Solomon parity (and versioned GFS backups), and preventing it by periodically rewriting aging files to recharge the cells.
 
-## Install
+## 📦 Install
 
 Download the latest [release](https://github.com/Hawkynt/Filesystem-Toolbox/releases/latest) (or a [nightly](https://github.com/Hawkynt/Filesystem-Toolbox/releases)) and unpack it anywhere - no installer. Requires Windows with .NET Framework 4.8 or later (a .NET 8 build is produced too).
 
-## Usage
+## 🚀 Usage
 
 1. Start `Filesystem-Toolbox.exe`; it lives in the system tray (a second start just pops the window of the running instance).
 2. Open *Settings…* from the tray menu and add the folders to watch. Settings **inherit along the path**: top-level entries are watch roots, nested entries override single settings for their subtree (check a box to override, uncheck it to fall back to the inherited value - shown grayed). Per folder you can configure:
@@ -60,7 +60,7 @@ While running, filesystem watchers keep the checksum database and the parity sto
 - **Limit:** with less than 100 % redundancy a *completely lost* file cannot be reconstructed from parity - that is what the GFS backup is for (snapshot copies are themselves hash-verified before being restored, searching newest to oldest).
 - **Refresh** rewrites verified-clean files in place (read → write → flush to device → restore timestamps) to recharge flash cells. Each refresh costs one program/erase cycle - the 180-day default means ~2 cycles/year, negligible against NAND endurance. Useful for passive media (USB sticks, SD cards); pointless for managed SSDs, leave it off there.
 
-## Features
+## ✨ Features
 
 - watches any number of folder trees with path-inherited per-folder policies (`FilesystemToolbox.json` v2; v1 files and legacy `CheckedFolders.lst` migrate automatically)
 - bit-rot **detection** that distinguishes silent corruption from intentional edits via the size/mtime/hash triple
@@ -73,7 +73,7 @@ While running, filesystem watchers keep the checksum database and the parity sto
 - statistics window: KPIs (errors found/corrected, MTBF), degradation badge with threshold warnings, SMART readout, pie/bar charts
 - single-instance tray app; sortable problem grid with status classification
 
-## Building
+## 🛠️ Building
 
 ```bash
 dotnet build Filesystem-Toolbox.slnx -c Release
@@ -82,6 +82,13 @@ dotnet test  Filesystem-Toolbox.Tests/Filesystem-Toolbox.Tests.csproj -c Release
 
 The solution (slnx format, SDK ≥ 9) contains the WinForms app (`net48;net8.0-windows`), the UI-free domain library `Filesystem-Toolbox.Core` (`net48;net8.0`) and an NUnit test suite (`net8.0`) with Unit/Integration categories. `run-tests-with-coverage.bat`/`.sh` produces an HTML coverage report under `TestResults/CoverageReport/`.
 
-## License
+## ❤️ Support
 
-Licensed under LGPL-3.0 - see [LICENSE](LICENSE).
+If this project saves you time or money, consider supporting its development:
+
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub-Sponsor-EA4AAA?logo=githubsponsors)](https://github.com/sponsors/Hawkynt)
+[![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal)](https://www.paypal.me/hawkynt)
+
+## 📜 License
+
+Licensed under LGPL-3.0-or-later — see [LICENSE](LICENSE).
