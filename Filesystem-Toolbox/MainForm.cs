@@ -111,14 +111,8 @@ namespace Filesystem_Toolbox {
     }
 
     private readonly ToolboxService _logic;
-    private readonly System.Threading.Timer _checkTimer;
-
-    private TimeSpan _CheckInterval {
-      get {
-        var schedule = this._logic?.Configuration?.VerifySchedule;
-        return schedule?.Kind == Filesystem_Toolbox.Core.Scheduling.ScheduleKind.Interval ? schedule.Value.Interval : TimeSpan.FromMinutes(10);
-      }
-    }
+    private readonly System.Threading.Timer _schedulerTimer;
+    private static readonly TimeSpan _SCHEDULER_POLL = TimeSpan.FromMinutes(1);
 
     internal MainForm(ToolboxService logic = null) {
       this._logic = logic;
@@ -126,8 +120,52 @@ namespace Filesystem_Toolbox {
       this.SetFormTitle();
 
       this.dgvProblems.DataSource = this._entries;
-      this._checkTimer = new System.Threading.Timer(this.tCheckTimer_Tick);
-      this._checkTimer.Change(this._CheckInterval, Timeout.InfiniteTimeSpan);
+      this._schedulerTimer = new System.Threading.Timer(this._SchedulerTick);
+      this._schedulerTimer.Change(TimeSpan.FromSeconds(5), _SCHEDULER_POLL);
+    }
+
+    /// <summary>
+    /// The 1-minute scheduler poll: asks the service which per-root actions are due
+    /// (per the inherited schedules, including catch-ups after downtime) and dispatches
+    /// each one once - claims prevent double-runs, failures stay due and are retried.
+    /// </summary>
+    private void _SchedulerTick(object _) {
+      var logic = this._logic;
+      if (logic == null)
+        return;
+
+      foreach (var due in logic.GetDueActions()) {
+        if (!logic.TryBeginScheduled(due))
+          continue;
+
+        var action = due;
+        this.Async(() => {
+          try {
+            switch (action.Action) {
+              case Core.Scheduling.ScheduledAction.Verify:
+                this._currentStatus = new WindowStatus("Verification Running...");
+                logic.RunClassifiedChecks(action.RootPath, this._ProcessVerificationResult);
+                break;
+
+              case Core.Scheduling.ScheduledAction.Backup:
+                this._currentStatus = new WindowStatus("Backup Running...");
+                logic.RunBackup(action.RootPath);
+                break;
+
+              case Core.Scheduling.ScheduledAction.Refresh:
+                this._currentStatus = new WindowStatus("Media Refresh Running...");
+                logic.RunRefresh(action.RootPath);
+                break;
+            }
+
+            logic.CompleteScheduled(action);
+          } catch (Exception) {
+            logic.AbortScheduled(action);
+          } finally {
+            this._currentStatus = WindowStatus.Empty;
+          }
+        });
+      }
     }
 
     private void _AddEntry(DgvEntry entry) {
@@ -206,8 +244,8 @@ namespace Filesystem_Toolbox {
 
     private void tsmiExitApplication_Click(object _, EventArgs __) => Application.Exit();
 
-    private void tCheckTimer_Tick(object _) {
-      this._checkTimer.Change(Timeout.Infinite, Timeout.Infinite);
+    /// <summary>Manual full verification of every folder (the scheduler runs per-root checks on its own).</summary>
+    private void _RunAllChecks() {
       var isRunning = (bool?)null;
       try {
         isRunning = this.VerificationRunning;
@@ -219,12 +257,10 @@ namespace Filesystem_Toolbox {
       } finally {
         if (isRunning != null && !isRunning.Value)
           this.VerificationRunning = false;
-
-        this._checkTimer.Change(this._CheckInterval, Timeout.InfiniteTimeSpan);
       }
     }
 
-    private void tsmiVerifyFolders_Click(object _, EventArgs __) => this.Async(this.tCheckTimer_Tick);
+    private void tsmiVerifyFolders_Click(object _, EventArgs __) => this.Async(this._RunAllChecks);
 
     private void tsmiRebuildDatabase_Click(object _, EventArgs __) {
       if (
@@ -335,8 +371,7 @@ namespace Filesystem_Toolbox {
         if (dialog.ShowDialog(this) != DialogResult.OK)
           return;
 
-        this._logic.ApplyConfiguration(dialog.Result);
-        this._checkTimer.Change(this._CheckInterval, Timeout.InfiniteTimeSpan);
+        this._logic.ApplyConfiguration(dialog.Result); // the scheduler poll picks up new schedules on its next tick
       }
     }
 

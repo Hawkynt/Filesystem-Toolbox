@@ -65,8 +65,10 @@ namespace Filesystem_Toolbox.Core {
     private static readonly DirectoryInfo _APPLICATION_FOLDER = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
     private const string _CONFIGURATION_FILE = "FilesystemToolbox.json";
     private const string _LEGACY_CONFIGURATION_FILE = "CheckedFolders.lst";
+    private const string _SCHEDULER_STATE_FILE = "SchedulerState.json";
 
     private readonly List<FolderContext> _folders = new List<FolderContext>();
+    private readonly Scheduling.SchedulerService _scheduler = new Scheduling.SchedulerService(_APPLICATION_FOLDER.File(_SCHEDULER_STATE_FILE));
 
     private static FileInfo _ConfigurationFile => _APPLICATION_FOLDER.File(_CONFIGURATION_FILE);
     private static FileInfo _LegacyConfigurationFile => _APPLICATION_FOLDER.File(_LEGACY_CONFIGURATION_FILE);
@@ -248,6 +250,18 @@ namespace Filesystem_Toolbox.Core {
 
       return total;
     }
+
+    /// <summary>Scheduled actions (verify/backup/refresh per root) that are due right now.</summary>
+    public IReadOnlyList<Scheduling.DueAction> GetDueActions() => this._scheduler.GetDueActions(this.Resolver);
+
+    /// <summary>Claims a scheduled action so it cannot run twice concurrently.</summary>
+    public bool TryBeginScheduled(Scheduling.DueAction action) => this._scheduler.TryBeginRun(action);
+
+    /// <summary>Marks a scheduled action as successfully completed (persists its timestamp).</summary>
+    public void CompleteScheduled(Scheduling.DueAction action) => this._scheduler.CompleteRun(action);
+
+    /// <summary>Releases a failed scheduled action so it stays due and is retried.</summary>
+    public void AbortScheduled(Scheduling.DueAction action) => this._scheduler.AbortRun(action);
 
     /// <summary>Runs the preventive flash refresh on a single watch root.</summary>
     public RefreshReport RunRefresh(string rootPath, CancellationToken token = default) {
