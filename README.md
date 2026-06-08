@@ -13,7 +13,7 @@
 ![Code Size](https://img.shields.io/github/languages/code-size/Hawkynt/Filesystem-Toolbox?color=4CAF50)
 ![Repo Size](https://img.shields.io/github/repo-size/Hawkynt/Filesystem-Toolbox?color=FF9800)
 
-[![Release](https://img.shields.io/github/v/release/Hawkynt/Filesystem-Toolbox?sort=semver)](https://github.com/Hawkynt/Filesystem-Toolbox/releases/latest)
+[![Release](https://img.shields.io/github/v/release/Hawkynt/Filesystem-Toolbox)](https://github.com/Hawkynt/Filesystem-Toolbox/releases/latest)
 [![Nightly](https://img.shields.io/github/v/release/Hawkynt/Filesystem-Toolbox?include_prereleases&sort=date&label=nightly&color=FF9800)](https://github.com/Hawkynt/Filesystem-Toolbox/releases)
 [![Downloads](https://img.shields.io/github/downloads/Hawkynt/Filesystem-Toolbox/total)](https://github.com/Hawkynt/Filesystem-Toolbox/releases)
 
