@@ -19,11 +19,35 @@
 
 > A Windows tray application that protects folders - especially on USB sticks and SD cards that silently "forget" data as their flash cells lose charge - by detecting bit rot through SHA-512 checksums, repairing it from locally stored Reed-Solomon parity (and versioned GFS backups), and preventing it by periodically rewriting aging files to recharge the cells.
 
-## 📦 Install
+## 🧭 Vision
+
+Flash memory forgets. A USB stick or SD card left in a drawer loses charge in its cells, and the
+files on it rot quietly — no error, no warning, just a photo that will not open a few years from now.
+Filesystem-Toolbox exists to make that failure visible and, wherever possible, undo it: it checksums
+what you tell it to watch, keeps Reed-Solomon parity beside the data so damage can be repaired rather
+than merely reported, and rewrites ageing files to recharge the cells before they forget at all.
+
+The direction is that protection should be something you configure once per folder and stop thinking
+about — inherited down the tree, running on a schedule, catching up after the machine was off.
+
+## ✨ Features
+
+- watches any number of folder trees with path-inherited per-folder policies (`FilesystemToolbox.json` v2; v1 files and legacy `CheckedFolders.lst` migrate automatically)
+- bit-rot **detection** that distinguishes silent corruption from intentional edits via the size/mtime/hash triple
+- bit-rot **repair** from local Reed-Solomon parity with configurable redundancy, hash-verified and atomic
+- versioned GFS backup fallback for whole-file restore (snapshots searched newest to oldest), hash-gated against rot inside the backup
+- preventive flash **refresh** with persisted per-file timestamps
+- auto-repair mode per folder; on-corruption command hook per file
+- duplicate-to-hardlink merger (NTFS): size-bucketed, block-compared, new links read-only by default since NTFS hard links are not copy-on-write
+- per-root schedules (interval, daily or weekly) with downtime catch-up; self-healing checksum database; balloon notifications and an interactive unrepairable-file dialog
+- statistics window: KPIs (errors found/corrected, MTBF), degradation badge with threshold warnings, SMART readout, pie/bar charts
+- single-instance tray app; sortable problem grid with status classification
+
+## 📦 Installation
 
 Download the latest [release](https://github.com/Hawkynt/Filesystem-Toolbox/releases/latest) (or a [nightly](https://github.com/Hawkynt/Filesystem-Toolbox/releases)) and unpack it anywhere - no installer. Requires Windows with .NET Framework 4.8 or later (a .NET 8 build is produced too).
 
-## 🚀 Usage
+## 🚀 Quick start
 
 1. Start `Filesystem-Toolbox.exe`; it lives in the system tray (a second start just pops the window of the running instance).
 2. Open *Settings…* from the tray menu and add the folders to watch. Settings **inherit along the path**: top-level entries are watch roots, nested entries override single settings for their subtree (check a box to override, uncheck it to fall back to the inherited value - shown grayed). Per folder you can configure:
@@ -59,19 +83,6 @@ While running, filesystem watchers keep the checksum database and the parity sto
 - Parity is cryptographically bound to the file state it was built from; stale parity (file legitimately edited since) is detected and rebuilt, never applied.
 - **Limit:** with less than 100 % redundancy a *completely lost* file cannot be reconstructed from parity - that is what the GFS backup is for (snapshot copies are themselves hash-verified before being restored, searching newest to oldest).
 - **Refresh** rewrites verified-clean files in place (read → write → flush to device → restore timestamps) to recharge flash cells. Each refresh costs one program/erase cycle - the 180-day default means ~2 cycles/year, negligible against NAND endurance. Useful for passive media (USB sticks, SD cards); pointless for managed SSDs, leave it off there.
-
-## ✨ Features
-
-- watches any number of folder trees with path-inherited per-folder policies (`FilesystemToolbox.json` v2; v1 files and legacy `CheckedFolders.lst` migrate automatically)
-- bit-rot **detection** that distinguishes silent corruption from intentional edits via the size/mtime/hash triple
-- bit-rot **repair** from local Reed-Solomon parity with configurable redundancy, hash-verified and atomic
-- versioned GFS backup fallback for whole-file restore (snapshots searched newest to oldest), hash-gated against rot inside the backup
-- preventive flash **refresh** with persisted per-file timestamps
-- auto-repair mode per folder; on-corruption command hook per file
-- duplicate-to-hardlink merger (NTFS): size-bucketed, block-compared, new links read-only by default since NTFS hard links are not copy-on-write
-- per-root schedules (interval, daily or weekly) with downtime catch-up; self-healing checksum database; balloon notifications and an interactive unrepairable-file dialog
-- statistics window: KPIs (errors found/corrected, MTBF), degradation badge with threshold warnings, SMART readout, pie/bar charts
-- single-instance tray app; sortable problem grid with status classification
 
 ## 🛠️ Building
 
